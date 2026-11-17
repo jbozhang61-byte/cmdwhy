@@ -1,0 +1,67 @@
+命令编号  共 62 条 · 显示 62 条 · 11 个命令重复出现
+编号来自 history 输出；没有 history 编号的显示为 #分析序号。查看：cmdwhy explain <编号>
+
+     501  09:12:00  ls -la
+     502  09:12:30  git status  （第 1/2 次）
+     503  09:13:00  python3 app.py  （第 1/2 次）
+     504  09:15:00  pip install -r requirements.txt  （第 1/2 次）
+     505  09:17:00  sudo apt install python3-venv -y
+     506  09:18:00  python3 -m venv .venv
+     507  09:19:00  source .venv/bin/activate
+     508  09:20:00  pip install -r requirements.txt  （第 2/2 次）
+     509  09:21:00  python3 app.py  （第 2/2 次）
+     510  09:24:00  pytest -q  （第 1/2 次）
+     511  09:25:00  pip install pytest
+     512  09:26:00  pytest -q  （第 2/2 次）
+     513  09:30:00  git status  （第 2/2 次）
+     514  09:32:00  git puhs
+     515  09:32:30  git push  （第 1/2 次）
+     516  09:34:00  git log --oneline -5  （第 1/2 次）
+     517  09:42:00  git checkout -b feat/history-why
+     518  11:40:00  apt install jq
+     519  11:41:00  sudo apt install jq -y
+     520  11:44:00  ./deploy.sh  （第 1/2 次）
+     521  11:45:00  chmod +x deploy.sh
+     522  11:46:00  ./deploy.sh  （第 2/2 次）
+     523  11:52:00  npm run dev  （第 1/2 次）
+     524  11:53:00  ss -ltnp | grep 3000
+     525  11:54:00  lsof -i :3000
+     526  11:55:00  kill 4242
+     527  11:56:00  npm run dev  （第 2/2 次）
+     528  12:02:00  docker ps
+     529  12:03:00  sudo docker ps
+     530  12:07:00  journalctl -u docker -n 20 --no-pager
+     531  15:05:00  cd ~/infra
+     532  15:05:30  ls
+     533  15:06:00  vim nginx.conf
+     534  15:08:00  nginx -t
+     535  15:09:00  sudo nginx -t
+     536  15:10:00  systemctl reload nginx
+     537  15:11:00  sudo systemctl reload nginx
+     538  15:13:00  curl -I localhost
+     539  15:14:00  curl -sS -o /dev/null -w "%{http_code}" localhost/health
+     540  15:17:00  journalctl -u nginx -n 20 --no-pager
+     541  15:18:00  df -h  （第 1/2 次）
+     542  15:19:00  du -sh /var/log
+     543  15:20:00  sudo journalctl --vacuum-size=200M  （第 1/2 次）
+     544  15:23:00  uptime
+     545  18:20:00  git push origin main  （第 1/2 次）
+     546  18:20:30  git pull --rebase
+     547  18:21:00  git push origin main  （第 2/2 次）
+     548  18:22:00  git log --oneline -5  （第 2/2 次）
+     549  18:25:00  git checkout -b fix/port-config
+     550  18:28:00  python3 -m pytest -q
+     551  18:32:00  git add -A
+     552  18:33:00  git commit -m "fix: use env port"
+     553  18:34:00  git push  （第 2/2 次）
+     554  21:00:00  uname -a
+     555  21:01:00  df -h  （第 2/2 次）
+     556  21:02:00  sudo apt update
+     557  21:04:00  sudo apt upgrade -y
+     558  21:06:00  sudo apt autoremove -y
+     559  21:08:00  sudo journalctl --vacuum-size=200M  （第 2/2 次）
+     560  21:10:00  sudo systemctl restart nginx
+     561  21:11:00  curl -I https://example.com
+     562  21:12:00  htop
+
+重复命令会显示“第 k/n 次”，每个编号对应一次具体执行，可直接 cmdwhy explain <编号>。

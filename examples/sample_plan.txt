@@ -1,0 +1,11 @@
+下一步计划
+  基于 #45 · Git 同步与提交
+  目标  把本地改动安全地同步到远端
+
+  1. [中风险] git pull --rebase
+       先同步远端，消除非快进冲突
+
+  2. [低风险] git push origin main
+       同步后重跑推送
+
+当前模式 suggest：只给计划；cmdwhy do --yes 执行；cmdwhy mode auto 自动。

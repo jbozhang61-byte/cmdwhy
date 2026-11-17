@@ -1,0 +1,56 @@
+命令时间线  最近 13 条 / 共 62 条 · 5 个会话
+h518 = history 编号，#18 = 分析序号；cmdwhy explain 518 / '#18' 查看（cmdwhy history 列全表）
+
+── S2  11:40–12:07 · 27m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
+   13 条命令 · 4 处报错 · 4 个修复动作
+  #18  11:40:00  h518   $ apt install jq
+       ✗ 失败（1）  意图：安装系统包
+       报错  PERM:dpkg-lock  E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
+       动机  执行失败，随后用修复动作救场
+       修复链  sudo apt install jq -y  ✓ 已验证
+       更正  sudo apt install jq（高）
+  #19  11:41:00  h519   $ sudo apt install jq -y
+       ✓ 成功（0）  补 sudo 提权重试
+       动机  修复 #18 的报错
+       修复  #18 的 PERM:dpkg-lock
+       改变  安装软件包 jq
+  #20  11:44:00  h520   $ ./deploy.sh
+       ✗ 失败（126）  意图：运行 ./deploy.sh  新增
+       报错  PERM:exec  bash: ./deploy.sh: Permission denied
+       动机  执行失败，随后用修复动作救场
+       修复链  chmod +x deploy.sh  ✓ 已验证
+  #21  11:45:00  h521   $ chmod +x deploy.sh
+       ✓ 成功（0）  给脚本加执行权限  新增
+       动机  修复 #20 的报错
+       修复  #20 的 PERM:exec
+       改变  修改权限 +x deploy.sh
+  #22  11:46:00  h522   $ ./deploy.sh
+       ✓ 成功（0）  运行 ./deploy.sh
+  #23  11:52:00  h523   $ npm run dev
+       ✗ 失败（1）  意图：运行 npm 脚本  新增
+       报错  PORT:3000  Error: listen EADDRINUSE: address already in use :::3000
+       动机  执行失败，随后用修复动作救场
+       修复链  kill 4242  ✓ 已验证
+  #24  11:53:00  h524   $ ss -ltnp | grep 3000
+       ✓ 成功（0）  查看端口/连接  新增
+       动机  排查 #23 的报错
+  #25  11:54:00  h525   $ lsof -i :3000
+       ✓ 成功（0）  查看端口占用  新增
+  #26  11:55:00  h526   $ kill 4242
+       ✓ 成功（0）  结束占用端口的进程  新增
+       动机  修复 #23 的报错
+       修复  #23 的 PORT:3000
+       改变  结束进程 4242
+  #27  11:56:00  h527   $ npm run dev
+       ✓ 成功（0）  运行 npm 脚本
+  #28  12:02:00  h528   $ docker ps
+       ✗ 失败（1）  意图：查看容器  新增
+       报错  DOCKER  permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker…
+       动机  执行失败，随后用修复动作救场
+       修复链  sudo docker ps  ✓ 已验证
+  #29  12:03:00  h529   $ sudo docker ps
+       ✓ 成功（0）  修复 Docker 访问
+       动机  修复 #28 的报错
+       修复  #28 的 DOCKER
+  #30  12:07:00  h530   $ journalctl -u docker -n 20 --no-pager
+       ✓ 成功（0）  查看系统日志  新增
