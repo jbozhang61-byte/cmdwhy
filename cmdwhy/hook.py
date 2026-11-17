@@ -182,7 +182,7 @@ def install(cfg, shells=("bash", "zsh"), rc_override=None, print_only=False):
             fh.write(block + "\n")
         messages.append("已写入 %s，并在 %s 末尾加入加载语句。" % (path, rc))
     if not print_only:
-        messages.append("新开一个终端或执行 source ~/.bashrc 后生效。")
+        messages.append("新开一个对应 shell 的终端，或 source 刚写入的 rc 文件后生效。")
     return messages
 
 

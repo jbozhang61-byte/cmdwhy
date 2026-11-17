@@ -236,9 +236,9 @@ class Renderer:
             meta.append("过滤 %s" % grep)
         lines = [p.bold("命令编号") + "  " + p(" · ".join(meta), "grey")]
         if any(row["hist_id"] is not None for row in rows):
-            lines.append(p("编号来自 history 输出；没有 history 编号的显示为 #分析序号。查看：cmdwhy explain <编号>", "grey"))
+            lines.append(p("e... 是稳定 ID；history 编号优先，没有则显示 #分析序号。查看：cmdwhy explain e...", "grey"))
         else:
-            lines.append(p("编号是 cmdwhy 的分析序号。查看：cmdwhy explain <编号>", "grey"))
+            lines.append(p("e... 是稳定 ID，#... 是当前顺序（会随新增历史变化）。查看：cmdwhy explain e...", "grey"))
         lines.append("")
         for row in selected:
             stamp = fmt_time(row["ts"]) if row["ts"] else "--:--:--"

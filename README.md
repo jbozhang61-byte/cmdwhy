@@ -281,6 +281,8 @@ history | cmdwhy analyze --stdin   # 只看一次，不写库
 
 修复链、后续命令、报告里的引用会显示成 `#18[e1a2b3c4]`，其中 e 开头的是稳定 ID。推荐用稳定 ID 定位：
 
+同一 history 编号的 hook 事件和 history 输出会按同一次执行合并，保留信息更全的一条；无法确认的重复仍会保留，不强行合并。
+
 `@bash
 cmdwhy explain e1a2b3c4
 cmdwhy explain uid:e1a2b3c4

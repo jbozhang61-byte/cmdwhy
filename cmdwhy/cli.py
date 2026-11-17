@@ -1006,7 +1006,7 @@ def cmd_mode(args, cfg, renderer):
         cfg.save()
         print("autopilot = " + action)
         if action == "auto":
-            print("低/中风险步骤会被自动执行；可用 --dry-run 先看计划。")
+            print("只自动执行低风险步骤；中风险写操作需 cmdwhy do --yes；高风险永不执行。")
         return 0
     print("用法：cmdwhy mode [status|off|suggest|auto|autocorrect on|off]", file=sys.stderr)
     return 2
