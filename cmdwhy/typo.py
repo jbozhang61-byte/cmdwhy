@@ -328,7 +328,11 @@ def propose_fixes(cmd, index: CorpusIndex = None, error=None, limit=3):
                     command=_rebuild(tokens, 1, item.word),
                     kind="subcommand",
                     score=item.score,
-                    confidence=_confidence(item.score),
+                    confidence=(
+                        "high"
+                        if item.distance <= 1 and item.word in SUBCOMMANDS.get(head, ())
+                        else _confidence(item.score)
+                    ),
                     reasons=["%s %s" % (head, item.word)] + item.reasons,
                     distance=item.distance,
                     uses=item.uses,

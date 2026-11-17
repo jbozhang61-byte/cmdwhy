@@ -780,16 +780,23 @@ class Renderer:
         lines.append("")
         lines.append("  " + p("这是什么", "cyan") + "  " + hint["title"])
         lines.append("  " + p("为什么", "cyan") + "  " + hint["why"])
-        if remedies:
+        verified_remedies = [remedy for remedy in remedies if remedy.verified > 0]
+        if verified_remedies:
             lines.append("")
             lines.append("  " + p("你以前这样修好过（按有效次数排序）", "green"))
-            for index, remedy in enumerate(remedies, 1):
+            for index, remedy in enumerate(verified_remedies, 1):
                 lines.append("    %d. %s" % (index, p(remedy.command, "bold")))
                 lines.append(
                     p("       有效 %d 次 · 最近 %s" % (remedy.verified, fmt_date(remedy.last_ts)), "grey")
                 )
                 if remedy.sample:
                     lines.append(p("       当时错误：" + truncate(remedy.sample, 80), "grey"))
+        elif remedies:
+            lines.append("")
+            lines.append("  " + p("知识库里只有未验证的修法，以下仅供参考", "yellow"))
+            for index, remedy in enumerate(remedies, 1):
+                lines.append("    %d. %s" % (index, p(remedy.command, "bold")))
+                lines.append(p("       还没有重跑验证过", "grey"))
         else:
             lines.append("")
             lines.append("  " + p("知识库里还没有同类修复记录，先用通用建议。", "yellow"))

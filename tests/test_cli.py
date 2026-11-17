@@ -292,6 +292,32 @@ class CliTest(unittest.TestCase):
         self.assertIn("找到同类错误的历史修法", proc.stderr)
         self.assertIn("fixed", proc.stdout)
 
+
+    def test_diagnose_marks_unverified_remedy(self):
+        entry = {
+            "version": 1,
+            "entries": {
+                "PERM": {
+                    "category": "PERM",
+                    "count": 1,
+                    "norm": "permission denied",
+                    "remedies": {
+                        "sudo apt install jq": {
+                            "steps": ["sudo apt install jq"],
+                            "count": 1,
+                            "verified": 0,
+                            "last_ts": 1763341920,
+                        }
+                    },
+                }
+            },
+        }
+        with open(os.path.join(self.home, "knowledge.json"), "w", encoding="utf-8") as fh:
+            json.dump(entry, fh)
+        proc = self.run_cli("diagnose", "--signature", "PERM", expect=0)
+        self.assertIn("未验证", proc.stdout)
+        self.assertNotIn("你以前这样修好过", proc.stdout)
+
     def test_mode_toggles(self):
         status = self.run_cli("mode", expect=0).stdout
         self.assertIn("suggest", status)

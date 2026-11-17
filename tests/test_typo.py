@@ -30,6 +30,7 @@ class TypoTest(unittest.TestCase):
         self.assertTrue(fixes)
         self.assertEqual(fixes[0].command, "git status")
         self.assertEqual(fixes[0].kind, "subcommand")
+        self.assertEqual(fixes[0].confidence, "high")
 
     def test_propose_head_fix(self):
         fixes = propose_fixes("gti status")

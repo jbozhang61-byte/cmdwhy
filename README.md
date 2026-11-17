@@ -516,16 +516,26 @@ $ cmdwhy fix "gti status"
 
 ## 局限（先说实话）
 
-1. **旧 bash 历史没有退出码**。没有 hook 时，失败靠上下文推断，置信度只能是低/中；装上 hook 后的新命令才是“高”。
+1. **还没在 Ubuntu 桌面/VM 的默认终端里验收**；本次已在 Ubuntu 24.04 WSL 上原生跑通 144 个测试和 hook 交互式测试。旧 bash 历史没有退出码时，失败只能靠上下文推断，置信度是低/中。
 2. **hook 只覆盖 bash / zsh**。fish 可以导入历史，但没有实时退出码 hook。其他 shell 可以把事件按上面的 JSON 格式写进 `events.jsonl`。
 3. **历史里的 cwd 可能已经不存在**，这时项目类型、Git 分支、venv 只能靠 hook 当时记录或留空，不会瞎猜。
 4. **不拦截命令输出**。想拿到精确 stderr，用 `cw run -- 命令` 或 `cmdwhy run -- 命令`；它会把 stderr 尾部记入事件并立即诊断。
 5. **修复链是启发式**，不是因果证明。它给出的是“最可能”的解释，并明确标出置信度和验证状态。
 
+### Ubuntu 原生环境验证
+
+本次已在 Ubuntu 24.04.3 LTS（WSL2，Python 3.12.3，GNU bash 5.2.21，git 2.43.0）上原生跑过：
+
+- 144 个测试全部通过；
+- 交互式 bash + hook 实测：成功记录 history 编号、退出码、cwd；
+- `cw run` 自动纠错实测：`git stauts` → 自动执行 `git status`，退出码 0。
+
+仍未覆盖：Ubuntu 桌面/VM 的图形终端、zsh 实机、fish 实机。
+
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 143 个测试
+python3 -m unittest discover -s tests -v   # 144 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -557,7 +567,7 @@ cmdwhy/
 │   └── util.py        时间/路径/距离/颜色等工具
 ├── docs/COMMANDS.md   完整命令参考
 ├── examples/          样例输出与演示数据
-├── tests/             143 个单元 + 端到端 CLI 测试
+├── tests/             144 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile
