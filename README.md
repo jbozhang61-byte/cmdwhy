@@ -524,13 +524,17 @@ $ cmdwhy fix "gti status"
 
 ### Ubuntu 原生环境验证
 
-本次已在 Ubuntu 24.04.3 LTS（WSL2，Python 3.12.3，GNU bash 5.2.21，git 2.43.0）上原生跑过：
+已在两种 Ubuntu 24.04 原生环境中跑通：
 
-- 144 个测试全部通过；
-- 交互式 bash + hook 实测：成功记录 history 编号、退出码、cwd；
-- `cw run` 自动纠错实测：`git stauts` → 自动执行 `git status`，退出码 0。
+- **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
+- **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-仍未覆盖：Ubuntu 桌面/VM 的图形终端、zsh 实机、fish 实机。
+两边都是 **144 个测试全部通过**。VMware 里还做了真实交互式 bash + hook 测试：连续两次相同的 `git status` 被分别记录为 hist=3、hist=4；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
+
+完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
+
+仍未覆盖：Ubuntu 桌面图形终端、zsh / fish 实机、上千条真实历史、Ubuntu 20.04/22.04 回归。
+
 
 ## 开发与测试
 
@@ -566,6 +570,7 @@ cmdwhy/
 │   ├── guide.py       命令地图与 bash/zsh 补全脚本
 │   └── util.py        时间/路径/距离/颜色等工具
 ├── docs/COMMANDS.md   完整命令参考
+├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
 ├── tests/             144 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
