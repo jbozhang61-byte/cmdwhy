@@ -118,6 +118,7 @@ def is_trivial(cmd: str) -> bool:
 @dataclass
 class Event:
     seq: int = 0
+    uid: str = ""
     ts: float = 0.0
     cmd: str = ""
     exit_code: int = None
@@ -165,6 +166,7 @@ class Event:
     def to_dict(self) -> dict:
         data = {
             "seq": self.seq,
+            "uid": self.uid,
             "ts": self.ts,
             "cmd": self.cmd,
             "exit_code": self.exit_code,
@@ -190,6 +192,7 @@ class Event:
     def from_dict(cls, data: dict) -> "Event":
         return cls(
             seq=int(data.get("seq") or 0),
+            uid=str(data.get("uid") or data.get("event_id") or ""),
             ts=float(data.get("ts") or 0),
             cmd=str(data.get("cmd") or data.get("command") or ""),
             exit_code=_to_int(data.get("exit_code", data.get("exit"))),

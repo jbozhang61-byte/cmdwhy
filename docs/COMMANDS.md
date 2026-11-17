@@ -1,6 +1,6 @@
 # cmdwhy 命令参考
 
-版本：0.1.0（`cmdwhy version` 可查看当前安装版本）
+版本：0.2.0（`cmdwhy version` 可查看当前安装版本）
 
 所有命令都支持全局参数，位置随意：
 
@@ -42,7 +42,7 @@ cmdwhy --no-color timeline   # 适合重定向到文件
 | `fix` | 输入纠错 | 命令打错、找不到命令 |
 | `diagnose` | 同类错误检索 | 又遇到熟悉的报错 |
 | `kb` | 错误知识库 | 查看/导出修法 |
-| `hook` | bash/zsh hook | 让新命令带退出码 |
+| `hook` | bash/zsh/fish hook | 让新命令带退出码 |
 | `run` | 包装执行 + 即时诊断 | 想拿到精确 stderr；`--shell` 支持管道 |
 | `do` | 推断下一步并执行安全步骤 | 让工具根据上下文接着做 |
 | `mode` | 自动完成/自动纠错开关 | 开启或关闭 autopilot |
@@ -227,7 +227,8 @@ cmdwhy timeline --json
 cmdwhy explain last
 cmdwhy explain 518            # history 输出里的编号（优先）
 cmdwhy explain 518-520
-cmdwhy explain '#18'          # 分析序号（内部排序号）
+cmdwhy explain '#18'          # 分析序号（会随新增历史漂移）
+cmdwhy explain e1a2b3c4       # 稳定 ID（推荐）
 cmdwhy explain h518           # 强制按 history 编号
 cmdwhy explain seq:18         # 强制按分析序号
 cmdwhy explain 518 --context 40   # 前后各看 40 条
@@ -239,14 +240,15 @@ cmdwhy explain 518 --json
 | 写法 | 含义 |
 | --- | --- |
 | `518` | 先找 history 编号，找不到再当分析序号 |
-| `#18` / `seq:18` | 分析序号 |
+| `e1a2b3c4` / `uid:e1a2b3c4` | 稳定 ID（新增历史后不变，推荐） |
+| `#18` / `seq:18` | 分析序号（当前顺序，会漂移） |
 | `h518` / `h:518` | history 编号 |
 | `518-520` | 有 history 编号时按编号区间，否则按分析序号区间 |
 | `#18-20` / `seq:18-20` | 强制按分析序号区间 |
 | `h518-520` | 强制按 history 编号区间 |
 | `last` | 最近一条 |
 
-时间线里 `#18` 是分析序号，`h518` 是 history 编号；修复链里的 `#19` 仍指分析序号。同一个 history 编号出现多次时，默认显示最近一条，并给出提示。命令文本相同的多次执行拥有不同编号，先用 `cmdwhy history --duplicates` 看清，再 `cmdwhy explain 503`。
+时间线同时显示 `#18`（当前顺序）、`h518`（history 编号）和 `e1a2b3c4`（稳定 ID）。修复链/报告引用会写成 `#18[e1a2b3c4]`，推荐用稳定 ID 复查，因为新增历史后 `#18` 可能指向别的命令。同一个 history 编号出现多次时，默认显示最近一条，并给出提示。
 
 输出字段：
 
@@ -395,7 +397,7 @@ cw run --fix --yes -- git stauts        # 安装后等价的短命令
 - 捕获 stdout/stderr 并实时透传；
 - 失败后记录退出码、stderr 尾部、cwd、发行版；
 - 立即诊断并给出修正；
-- `--yes` 只自动执行通过安全检查的修正；危险命令、含 `<包名>` 占位符的建议一律不执行；`autocorrect` 还会尝试知识库里验证过的同类错误修法；
+- `--yes` 只自动执行通过安全检查的修正；危险命令、含 `<包名>` 占位符的建议一律不执行；`autocorrect` 只自动执行拼写/chmod 等无提权修正，并尝试知识库里验证过且不含 sudo 的修法；
 - `--retry` 只在“安装类”修正成功后重跑原命令；
 - `--shell` 让命令经过 shell 执行，支持管道、重定向、通配符；默认不经过 shell，参数原样传递。
 
@@ -406,9 +408,9 @@ cw run --fix --yes -- git stauts        # 安装后等价的短命令
 `@bash
 cmdwhy do --dry-run       # 推断下一步，只展示计划
 cmdwhy do --from 518      # 从指定编号开始推断
-cmdwhy do --yes           # 执行计划里的低/中风险步骤
+cmdwhy do --yes           # 执行计划里的低/中风险步骤（高风险仍不执行）
 cmdwhy mode suggest       # 默认：只给建议
-cmdwhy mode auto          # 自动执行低/中风险步骤
+cmdwhy mode auto          # 只自动执行低风险步骤
 cmdwhy mode off           # 关闭自动完成
 cmdwhy mode autocorrect on    # cw run 失败时自动改正输入
 `@
@@ -431,7 +433,8 @@ cmdwhy mode autocorrect on    # cw run 失败时自动改正输入
 安全边界：
 
 - 默认 `suggest`，`auto` 必须手动开启；
-- 只执行低/中风险且通过安全检查的步骤；高风险命令直接跳过；
+- auto 只执行低风险；中风险写操作需要 `--yes`；sudo/apt/systemctl 等高风险永不执行；
+- 每步 120 秒超时，失败即停；
 - 不执行 `cd`、`source`、`export` 这类无法影响父 shell 的命令；
 - 含 `<包名>` 等占位符的建议不会执行；
 - 执行结果会作为普通事件记录，可用 `cmdwhy explain` 复查。
@@ -445,13 +448,15 @@ cmdwhy mode autocorrect on    # cw run 失败时自动改正输入
 ```bash
 cmdwhy hook install
 cmdwhy hook install --shell bash
+cmdwhy hook install --shell zsh
+cmdwhy hook install --shell fish             # 写入 ~/.config/fish/config.fish
 cmdwhy hook install --print --shell bash     # 只打印脚本
 cmdwhy hook install --rc /tmp/bashrc          # 指定 rc（测试用）
 cmdwhy hook status
 cmdwhy hook uninstall
 ```
 
-hook 在每次提示符出现前，把上一条命令的退出码、cwd、发行版和 shell 的 history 编号写入 `events.jsonl`。连续执行同一条命令时，history 编号不同，因此会被分别记录。它不改变命令执行结果，也不拦截输出。
+hook 在每次提示符出现前，把上一条命令的退出码、cwd、发行版和 history 编号（有则记录）写入 `events.jsonl`。bash 用 `PROMPT_COMMAND`（兼容数组），zsh 用 `preexec`+`precmd`，fish 用 `fish_preexec`+`fish_prompt`。连续执行同一条命令会分别记录。它不改变命令执行结果，也不拦截输出。
 
 ### cmdwhy completion
 

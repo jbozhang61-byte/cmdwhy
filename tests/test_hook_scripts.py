@@ -100,13 +100,46 @@ printf 'FIRST=%s|%s SECOND=%s\\n' "$first_num" "$first_cmd" "$_CMDWHY_LAST_NUM"
         finally:
             shutil.rmtree(home, ignore_errors=True)
 
+    @unittest.skipUnless(BASH, "GNU bash not available")
+    def test_bash_preserves_prompt_command_array(self):
+        cfg, home = temp_config()
+        try:
+            script = hook_script("bash", cfg)
+            probe = 'PROMPT_COMMAND=("echo one" "echo two")\n' + script + "\ndeclare -p PROMPT_COMMAND\n"
+            result = subprocess.run(
+                [BASH, "-s"],
+                input=probe,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("echo one", result.stdout)
+            self.assertIn("echo two", result.stdout)
+            self.assertIn("_cmdwhy_record", result.stdout)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
     def test_zsh_script_shape(self):
         cfg, home = temp_config()
         try:
             script = hook_script("zsh", cfg)
-            self.assertIn("precmd_functions", script)
-            self.assertIn("fc -l -1", script)
-            self.assertIn("--hist-id", script)
+            self.assertIn("_cmdwhy_preexec", script)
+            self.assertIn("_cmdwhy_precmd", script)
+            self.assertIn("add-zsh-hook", script)
+            self.assertIn("--shell zsh", script)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_fish_script_shape(self):
+        cfg, home = temp_config()
+        try:
+            script = hook_script("fish", cfg)
+            self.assertIn("fish_preexec", script)
+            self.assertIn("fish_prompt", script)
+            self.assertIn("--shell fish", script)
         finally:
             shutil.rmtree(home, ignore_errors=True)
 

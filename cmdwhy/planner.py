@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 
 from .env import detect_project, detect_venv, git_info
@@ -56,6 +57,20 @@ class Plan:
 NON_EXECUTABLE_PREFIXES = ("cd ", "source ", ". ", "export ", "alias ", "unset ", "disown ", "exec ")
 
 
+def _normalize_risk(command, risk):
+    """把“看起来低风险”的写操作/提权操作提升到正确的风险级别。"""
+    lower = " " + (command or "").lower() + " "
+    if command.strip().startswith("sudo ") or " sudo " in lower:
+        return "high"
+    if re.search(r"\b(apt|apt-get|dpkg|snap)\b.*\b(install|remove|purge|upgrade)\b", lower):
+        return "high"
+    if re.search(r"\bsystemctl\b.*\b(start|stop|restart|reload|enable|disable)\b", lower):
+        return "high"
+    if re.search(r"\b(chmod|chown|kill|pkill|git\s+(pull|push|reset|checkout)|pip\s+install|npm\s+install|python3\s+-m\s+venv)\b", lower):
+        return "medium" if risk == "low" else risk
+    return risk
+
+
 def _is_executable(command):
     stripped = command.strip()
     if not stripped:
@@ -92,6 +107,7 @@ def build_plan(analysis, knowledge=None, cwd=None, limit=5, focus_seq=None):
         command = (command or "").strip()
         if not command or any(action.command == command for action in actions):
             return
+        risk = _normalize_risk(command, risk)
         actions.append(
             Action(
                 command=command,

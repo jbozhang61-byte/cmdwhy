@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 @dataclass
 class SearchResult:
     seq: int
+    uid: str
     hist_id: int
     ts: float
     cmd: str
@@ -24,6 +25,7 @@ class SearchResult:
     def to_dict(self):
         return {
             "seq": self.seq,
+            "uid": self.uid,
             "hist_id": self.hist_id,
             "ts": self.ts,
             "cmd": self.cmd,
@@ -119,6 +121,7 @@ def search_events(
             continue
         result = SearchResult(
             seq=event.seq,
+            uid=event.uid,
             hist_id=event.hist_id,
             ts=event.ts,
             cmd=event.cmd,

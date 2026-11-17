@@ -15,6 +15,14 @@ def history_map(analysis):
     return table
 
 
+def uid_map(analysis):
+    table = {}
+    for event in analysis.events:
+        if event.uid:
+            table.setdefault(event.uid.lower(), []).append(event)
+    return table
+
+
 def _resolve_hist(number, table, notes):
     matches = table.get(number) or []
     if not matches:
@@ -43,6 +51,7 @@ def resolve_targets(analysis, targets):
         last                  最近一条
         #18 / seq:18          分析序号（内部排序号）
         #18-20 / seq:18-20    分析序号区间
+        e1a2b3c4 / uid:e1a2b3c4  稳定 ID（推荐，不会随新增历史漂移）
         h518 / h:518          强制按 history 编号
         h518-520              强制按 history 编号区间
         518                   history 编号优先；没有则按分析序号
@@ -53,6 +62,7 @@ def resolve_targets(analysis, targets):
     events = analysis.events
     total = len(events)
     table = history_map(analysis)
+    uids = uid_map(analysis)
     seqs = []
     notes = []
     for raw in targets:
@@ -65,6 +75,24 @@ def resolve_targets(analysis, targets):
                 seqs.append(events[-1].seq)
             else:
                 notes.append("历史为空，没有 last 可解释")
+            continue
+
+        if low.startswith("uid:") or low.startswith("e:"):
+            wanted = token.split(":", 1)[1].lower()
+            if wanted.startswith("e"):
+                wanted = wanted[1:]
+            matches = uids.get(wanted) or []
+            if matches:
+                seqs.extend(event.seq for event in matches)
+            else:
+                notes.append("没有找到稳定 ID %s" % token)
+            continue
+        if re.fullmatch(r"e[0-9a-f]{6,}", low):
+            matches = uids.get(low[1:]) or []
+            if matches:
+                seqs.extend(event.seq for event in matches)
+            else:
+                notes.append("没有找到稳定 ID %s" % token)
             continue
 
         explicit = None

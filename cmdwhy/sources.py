@@ -10,7 +10,7 @@ from datetime import datetime
 
 from .model import Event
 from .redact import redact_command, redact_error
-from .util import append_line
+from .util import append_line, new_uid, stable_uid
 
 ZSH_RE = re.compile(r"^: (\d{9,12}):(\d+);(.*)$")
 HISTORY_RE = re.compile(r"^\s*(\d{1,7})\s+(.*)$")
@@ -209,7 +209,16 @@ def parse_file(path, fmt=None):
         text = fh.read()
     fmt = fmt or detect_format(path, text)
     parser = PARSERS.get(fmt, parse_bash)
-    return parser(text, source=os.path.basename(path)), fmt
+    events = parser(text, source=os.path.basename(path))
+    absolute = os.path.abspath(path)
+    for index, event in enumerate(events):
+        if not event.uid:
+            if event.hist_id is not None:
+                # history 编号 + 命令文本：历史文件被重写/截断后仍尽量稳定
+                event.uid = stable_uid("hist", absolute, event.hist_id, event.cmd)
+            else:
+                event.uid = stable_uid(absolute, index, event.ts, event.cmd)
+    return events, fmt
 
 
 def _info_rank(event: Event) -> int:
@@ -231,8 +240,19 @@ def _dedupe(events):
             other = kept[idx]
             if other.cmd != event.cmd:
                 continue
+            if other.uid and event.uid and other.uid == event.uid:
+                if _info_rank(event) < _info_rank(other):
+                    kept[idx] = event
+                replaced = True
+                break
             if other.source == event.source:
                 continue
+            if other.hist_id is not None and event.hist_id is not None and other.hist_id == event.hist_id:
+                # 同一个 history 编号来自 hook 与 history 输出：同一次执行，合并保留信息更全的
+                if _info_rank(event) < _info_rank(other):
+                    kept[idx] = event
+                replaced = True
+                break
             if other.ts and event.ts and abs(other.ts - event.ts) <= 5:
                 # history 输出里的每一行都是独立编号，哪怕命令文本相同也不能合并
                 if other.hist_id is not None or event.hist_id is not None:
@@ -279,6 +299,10 @@ def merge_events(events, cfg):
         if event.stderr and cfg.redact:
             event.stderr = redact_error(event.stderr)
         cleaned.append(event)
+    for event in cleaned:
+        if not event.uid:
+            # 内容派生的 ID：不依赖列表位置，导入前后保持稳定
+            event.uid = stable_uid(event.source, event.hist_id, event.ts, event.cmd)
     deduped = _dedupe(cleaned)
     if cfg.max_events and len(deduped) > cfg.max_events:
         deduped = deduped[-cfg.max_events:]
@@ -341,6 +365,8 @@ def read_store(cfg):
 
 def append_event(cfg, event: Event):
     cfg.ensure()
+    if not event.uid:
+        event.uid = new_uid()
     if cfg.redact:
         event.cmd = redact_command(event.cmd)
         if event.stderr:

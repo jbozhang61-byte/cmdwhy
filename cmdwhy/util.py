@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import sys
 import tempfile
+import uuid
 from datetime import datetime
 
 RESET = "\033[0m"
@@ -371,3 +373,16 @@ def json_default(obj):
         return obj.to_dict()
     except AttributeError:
         return str(obj)
+
+
+def new_uid(length=10):
+    """给新事件生成稳定引用 ID（只用于展示/引用，不参与排序）。"""
+    return uuid.uuid4().hex[:length]
+
+
+def stable_uid(*parts, **kwargs):
+    """根据来源、位置、命令生成可复现的 ID；同一输入永远得到同一 ID。"""
+    length = int(kwargs.get("length", 10))
+    payload = "\x1f".join("" if part is None else str(part) for part in parts)
+    return hashlib.sha1(payload.encode("utf-8", "replace")).hexdigest()[:length]
+

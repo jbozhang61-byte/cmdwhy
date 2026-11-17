@@ -35,7 +35,7 @@ def _pump(stream, target, buffer=None):
             buffer.append(chunk)
 
 
-def run_command(cmd, cwd=None):
+def run_command(cmd, cwd=None, timeout=None):
     """cmd 为字符串时走 shell（支持管道），为列表时不经过 shell（更安全）。"""
     start = time.time()
     proc = subprocess.Popen(
@@ -50,7 +50,13 @@ def run_command(cmd, cwd=None):
     err_thread = threading.Thread(target=_pump, args=(proc.stderr, sys.stderr.buffer, err_chunks), daemon=True)
     out_thread.start()
     err_thread.start()
-    code = proc.wait()
+    try:
+        code = proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        code = 124
+        print("cmdwhy: 命令超时（%s 秒），已终止。" % timeout, file=sys.stderr)
     out_thread.join(timeout=2)
     err_thread.join(timeout=2)
     duration = time.time() - start
@@ -141,7 +147,7 @@ def cmd_run(cfg, argv, fix=False, yes=False, retry=False, quiet=False, shell=Fal
                 fix = fixes[0]
                 if (
                     fix.confidence == "high"
-                    and fix.kind in ("head", "subcommand", "sudo", "chmod")
+                    and fix.kind in ("head", "subcommand", "chmod")
                     and not is_dangerous(fix.command)
                     and safe_to_autofix(fix.command)
                 ):
@@ -190,6 +196,8 @@ def cmd_run(cfg, argv, fix=False, yes=False, retry=False, quiet=False, shell=Fal
                 if candidate.verified <= 0:
                     continue
                 if any("<" in step or ">" in step for step in candidate.steps):
+                    continue
+                if any("sudo" in step.split() for step in candidate.steps):
                     continue
                 if all(safe_to_autofix(step) and not is_dangerous(step) for step in candidate.steps):
                     remedy = candidate

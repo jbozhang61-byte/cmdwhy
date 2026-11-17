@@ -99,13 +99,23 @@ class Renderer:
 
     def _event_head(self, event):
         hist = ("h%d" % event.hist_id) if event.hist_id is not None else ""
+        stable = ("e" + event.uid) if event.uid else ""
         return "  #%-3d %s  %s %s %s" % (
             event.seq,
             fmt_time(event.ts),
-            self.p(hist.ljust(6), "grey"),
+            self.p((hist.ljust(6) + stable).ljust(18), "grey"),
             self.p("$", "grey"),
             self.p(truncate(event.cmd, 96), "bold"),
         )
+
+    def _ref(self, analysis, seq):
+        try:
+            event = analysis.event(seq)
+        except Exception:
+            return "#%d" % seq
+        if getattr(event, "uid", ""):
+            return "#%d[e%s]" % (seq, event.uid)
+        return "#%d" % seq
 
     # ------------------------------------------------------------ 时间线
 
@@ -130,9 +140,9 @@ class Renderer:
             )
         )
         if any(event.hist_id is not None for event in analysis.events):
-            hint = "h518 = history 编号，#18 = 分析序号；cmdwhy explain 518 / '#18' 查看（cmdwhy history 列全表）"
+            hint = "h518 = history 编号；e1a2b3c4 = 稳定 ID；#18 = 当前顺序（新增历史会变）。推荐 cmdwhy explain e1a2b3c4"
         else:
-            hint = "#12 = 命令编号；cmdwhy explain 12 查看（cmdwhy history 列全表）"
+            hint = "e1a2b3c4 = 稳定 ID（推荐）；#12 = 当前顺序（会变）。cmdwhy history 显示两者"
         lines.append(self.p(hint, "grey"))
         lines.append("")
         for session in analysis.sessions:
@@ -176,7 +186,7 @@ class Renderer:
             lines.append(
                 "       "
                 + p("修复", "green")
-                + "  #%d 的 %s" % (source.seq, source.error.signature if source.error else "失败")
+                + "  %s 的 %s" % (self._ref(analysis, source.seq), source.error.signature if source.error else "失败")
             )
         if ann.steps:
             text = " → ".join(truncate(step, 46) for step in ann.steps)
@@ -235,7 +245,8 @@ class Renderer:
             marker = ""
             if row["total"] > 1:
                 marker = p("  （第 %d/%d 次）" % (row["occurrence"], row["total"]), "grey")
-            lines.append("  %6s  %s  %s%s" % (row["id"], stamp, truncate(row["cmd"], 88), marker))
+            stable = ("e" + row["uid"]) if row.get("uid") else " " * 11
+            lines.append("  %6s  %-11s  %s  %s%s" % (row["id"], stable, stamp, truncate(row["cmd"], 80), marker))
         lines.append("")
         lines.append(p("重复命令会显示“第 k/n 次”，每个编号对应一次具体执行，可直接 cmdwhy explain <编号>。", "grey"))
         return "\n".join(lines).rstrip()
@@ -322,13 +333,14 @@ class Renderer:
             }.get(result.status, ("·", "grey"))
             error = ("  " + p(result.error, "red")) if result.error else ""
             lines.append(
-                "  #%-3d %s  %s  %s  %s%s"
+                "  #%-3d %-11s %s  %s  %s  %s%s"
                 % (
                     result.seq,
+                    p(("e" + result.uid) if result.uid else "", "cyan"),
                     p(("h%d" % result.hist_id).ljust(6) if result.hist_id is not None else " " * 6, "grey"),
                     fmt_time(result.ts),
                     p(status[0], status[1]),
-                    p(truncate(result.cmd, 70), "bold"),
+                    p(truncate(result.cmd, 64), "bold"),
                     error,
                 )
             )
@@ -344,7 +356,7 @@ class Renderer:
             if detail:
                 lines.append("       " + p(" · ".join(detail), "grey"))
         lines.append("")
-        lines.append(p("查看详情：cmdwhy explain <编号>（history 编号或 #分析序号）", "grey"))
+        lines.append(p("查看详情：cmdwhy explain <编号>；e开头的是稳定 ID，新增历史后不会变", "grey"))
         return "\n".join(lines).rstrip()
 
     # ------------------------------------------------------------ 下一步计划
@@ -354,7 +366,7 @@ class Renderer:
         lines = [p.bold("下一步计划")]
         meta = []
         if plan.focus_seq:
-            meta.append("基于 #%d" % plan.focus_seq)
+            meta.append("基于 " + self._ref(analysis, plan.focus_seq))
         if plan.task:
             meta.append(plan.task)
         if meta:
@@ -374,15 +386,17 @@ class Renderer:
             if not action.executable:
                 suffix = "（仅建议：需在交互 shell 执行）"
             elif action.risk == "high":
-                suffix = "（高风险，不会自动执行）"
+                suffix = "（高风险，永不自动执行）"
+            elif action.risk == "medium":
+                suffix = "（写操作，auto 不执行，需 --yes）"
             lines.append("       " + action.reason + p(suffix, "yellow"))
         lines.append("")
         if mode == "auto":
-            lines.append(p("当前模式 auto：低/中风险步骤会自动执行；--dry-run 只看计划。", "yellow"))
+            lines.append(p("当前模式 auto：只自动执行低风险步骤；写操作需 cmdwhy do --yes；高风险永不自动执行。", "yellow"))
         elif mode == "off":
             lines.append(p("当前模式 off：先 cmdwhy mode suggest 再使用。", "yellow"))
         else:
-            lines.append(p("当前模式 suggest：只给计划；cmdwhy do --yes 执行；cmdwhy mode auto 自动。", "grey"))
+            lines.append(p("当前模式 suggest：只给计划；cmdwhy do --yes 执行低/中风险；cmdwhy mode auto 只自动跑低风险。", "grey"))
         return "\n".join(lines).rstrip()
 
     # ------------------------------------------------------------ 单条解释
@@ -397,9 +411,16 @@ class Renderer:
             ann = analysis.ann(seq)
             session = analysis.session_of.get(seq)
             lines.append("")
-            lines.append(self.p.bold("#%d" % seq) + "  " + self.p(fmt_datetime(event.ts), "grey"))
+            lines.append(
+                self.p.bold("#%d" % seq)
+                + ("  " + self.p("e" + event.uid, "cyan") if event.uid else "")
+                + "  "
+                + self.p(fmt_datetime(event.ts), "grey")
+            )
             lines.append("─" * 74)
             lines.append("命令    " + self.p(event.cmd, "bold"))
+            if event.uid:
+                lines.append("稳定 ID  " + self.p("e" + event.uid, "cyan") + "（推荐；新增历史后也不会变）")
             result = self._status(ann, event)
             if event.duration_ms:
                 result += self.p("  用时 %s" % fmt_duration(event.duration_ms / 1000.0), "grey")
@@ -455,7 +476,7 @@ class Renderer:
             if seq < len(analysis.events):
                 nxt = analysis.event(seq + 1)
                 nxt_ann = analysis.ann(seq + 1)
-                lines.append("后续    #%d %s  %s" % (nxt.seq, truncate(nxt.cmd, 50), self._status(nxt_ann, nxt)))
+                lines.append("后续    %s %s  %s" % (self._ref(analysis, nxt.seq), truncate(nxt.cmd, 50), self._status(nxt_ann, nxt)))
         return "\n".join(lines).strip()
 
     def why_sentence(self, analysis, ann):
@@ -472,12 +493,12 @@ class Renderer:
         if ann.fix_of:
             source = analysis.ann(ann.fix_of[0])
             sig = source.error.signature if source.error else "上一条失败"
-            text = "为了修复 #%d 的 %s，你%s%s" % (source.seq, sig, where, intent)
+            text = "为了修复 %s 的 %s，你%s%s" % (self._ref(analysis, source.seq), sig, where, intent)
             if source.verified:
                 if source.verified_at == ann.seq:
                     text += "；这条命令本身就是修复后的重跑，验证通过。"
                 else:
-                    text += "；#%d 的重跑确认了修复生效。" % source.verified_at
+                    text += "；%s 的重跑确认了修复生效。" % self._ref(analysis, source.verified_at)
             else:
                 text += "；目前还没看到重跑验证。"
             return text
@@ -587,8 +608,8 @@ class Renderer:
             for ann in fails:
                 event = analysis.event(ann.seq)
                 lines.append(
-                    "  #%d %s  %s  %s"
-                    % (ann.seq, fmt_time(event.ts), truncate(event.cmd, 60), self._status(ann, event))
+                    "  %s %s  %s  %s"
+                    % (self._ref(analysis, ann.seq), fmt_time(event.ts), truncate(event.cmd, 60), self._status(ann, event))
                 )
                 lines.append("       错误  " + truncate(ann.error.detail, 110))
                 if ann.steps:
@@ -597,13 +618,13 @@ class Renderer:
                     if ann.verified_at:
                         if ann.verified:
                             lines.append(
-                                "       验证  #%d %s 成功重跑"
-                                % (ann.verified_at, truncate(analysis.event(ann.verified_at).cmd, 50))
+                                "       验证  %s %s 成功重跑"
+                                % (self._ref(analysis, ann.verified_at), truncate(analysis.event(ann.verified_at).cmd, 50))
                             )
                         else:
                             lines.append(
-                                "       重跑  #%d %s（未记录退出码）"
-                                % (ann.verified_at, truncate(analysis.event(ann.verified_at).cmd, 50))
+                                "       重跑  %s %s（未记录退出码）"
+                                % (self._ref(analysis, ann.verified_at), truncate(analysis.event(ann.verified_at).cmd, 50))
                             )
                 elif ann.error.inferred:
                     lines.append("       修复  没看到明显的修复动作")
@@ -682,8 +703,8 @@ class Renderer:
             for ann in fails[:3]:
                 event = analysis.event(ann.seq)
                 lines.append(
-                    "  报错  #%d %s  %s"
-                    % (ann.seq, truncate(event.cmd, 42), ann.error.signature if ann.error else "")
+                    "  报错  %s %s  %s"
+                    % (self._ref(analysis, ann.seq), truncate(event.cmd, 42), ann.error.signature if ann.error else "")
                 )
                 if ann.steps:
                     lines.append("        修复  " + " → ".join(ann.steps))
@@ -997,9 +1018,9 @@ class Renderer:
                     ]
                     for ann in fails[:3]:
                         lines.append(
-                            "- #%d %s — %s"
+                            "- %s %s — %s"
                             % (
-                                ann.seq,
+                                self._ref(analysis, ann.seq),
                                 inline_code(analysis.event(ann.seq).cmd),
                                 ann.error.signature if ann.error else "",
                             )
@@ -1026,7 +1047,7 @@ class Renderer:
             lines.append("")
             for ann in anns:
                 event = analysis.event(ann.seq)
-                lines.append("- #%d %s %s" % (ann.seq, fmt_time(event.ts), inline_code(event.cmd)))
+                lines.append("- %s %s %s" % (self._ref(analysis, ann.seq), fmt_time(event.ts), inline_code(event.cmd)))
                 lines.append("  - 错误：%s" % ann.error.detail)
                 if ann.steps:
                     lines.append(
@@ -1054,6 +1075,7 @@ def build_history_rows(analysis, sid=None, grep=None, duplicates=False):
         rows.append(
             {
                 "seq": event.seq,
+                "uid": event.uid,
                 "hist_id": event.hist_id,
                 "id": str(event.hist_id) if event.hist_id is not None else "#%d" % event.seq,
                 "ts": event.ts,

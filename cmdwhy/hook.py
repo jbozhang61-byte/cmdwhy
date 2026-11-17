@@ -20,6 +20,10 @@ ZSH_MARK_START = "# >>> cmdwhy >>>"
 ZSH_MARK_END = "# <<< cmdwhy <<<"
 
 BASH_HOOK = r"""# cmdwhy shell hook（由 cmdwhy hook install 生成，可重复安装）
+if [ -n "$_CMDWHY_HOOK_LOADED" ]; then
+    return 0 2>/dev/null || true
+fi
+_CMDWHY_HOOK_LOADED=1
 _CMDWHY_LAST=""
 _CMDWHY_LAST_NUM=""
 _CMDWHY_DISTRO=""
@@ -43,43 +47,82 @@ _cmdwhy_record() {
         _CMDWHY_DISTRO=$(sed -n 's/^PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release 2>/dev/null)
     fi
     command __CMDWHY__ record --exit "$ec" --cmd "$cmd" --hist-id "$num" --cwd "$PWD" --shell bash --distro "$_CMDWHY_DISTRO" >/dev/null 2>&1 &
+    disown $! 2>/dev/null || true
 }
 
-if [ -n "$PROMPT_COMMAND" ]; then
-    PROMPT_COMMAND="_cmdwhy_record;$PROMPT_COMMAND"
+# bash 5.1+ 允许 PROMPT_COMMAND 是数组；不能粗暴覆盖
+if declare -p PROMPT_COMMAND 2>/dev/null | grep -q 'declare -a'; then
+    PROMPT_COMMAND+=(_cmdwhy_record)
+elif [ -n "$PROMPT_COMMAND" ]; then
+    case "$PROMPT_COMMAND" in
+        *_cmdwhy_record*) ;;
+        *) PROMPT_COMMAND="_cmdwhy_record;$PROMPT_COMMAND" ;;
+    esac
 else
     PROMPT_COMMAND="_cmdwhy_record"
 fi
 """
 
 ZSH_HOOK = r"""# cmdwhy shell hook（由 cmdwhy hook install 生成，可重复安装）
-_CMDWHY_LAST=""
-_CMDWHY_LAST_NUM=""
+if [[ -n "$_CMDWHY_HOOK_LOADED" ]]; then
+    return 0
+fi
+_CMDWHY_HOOK_LOADED=1
+_CMDWHY_CMD=""
 _CMDWHY_DISTRO=""
 
-_cmdwhy_record() {
+_cmdwhy_preexec() {
+    _CMDWHY_CMD="$1"
+}
+
+_cmdwhy_precmd() {
     local ec=$?
-    local line cmd num
-    line=$(fc -l -1 2>/dev/null)
-    num=$(printf '%s\n' "$line" | sed -n 's/^ *\([0-9][0-9]*\)  *.*/\1/p')
-    cmd=$(printf '%s\n' "$line" | sed 's/^ *[0-9][0-9]*  *//')
+    local cmd="$_CMDWHY_CMD"
+    _CMDWHY_CMD=""
     if [ -z "$cmd" ]; then return; fi
-    if [ -n "$num" ] && [ "$num" = "$_CMDWHY_LAST_NUM" ]; then return; fi
-    if [ -z "$num" ] && [ "$cmd" = "$_CMDWHY_LAST" ]; then return; fi
-    _CMDWHY_LAST="$cmd"
-    _CMDWHY_LAST_NUM="$num"
     case "$cmd" in
-        cmdwhy*|_cmdwhy*) return ;;
+        cmdwhy*|_cmdwhy*|exit|logout) return ;;
     esac
     if [ -z "$_CMDWHY_DISTRO" ]; then
         _CMDWHY_DISTRO=$(sed -n 's/^PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release 2>/dev/null)
     fi
-    command __CMDWHY__ record --exit "$ec" --cmd "$cmd" --hist-id "$num" --cwd "$PWD" --shell zsh --distro "$_CMDWHY_DISTRO" >/dev/null 2>&1 &
+    command __CMDWHY__ record --exit "$ec" --cmd "$cmd" --cwd "$PWD" --shell zsh --distro "$_CMDWHY_DISTRO" >/dev/null 2>&1
 }
 
-if (( ! $precmd_functions[(I)_cmdwhy_record] )); then
-    precmd_functions+=(_cmdwhy_record)
+autoload -Uz add-zsh-hook 2>/dev/null
+if ! add-zsh-hook preexec _cmdwhy_preexec 2>/dev/null; then
+    preexec_functions+=(_cmdwhy_preexec)
 fi
+if ! add-zsh-hook precmd _cmdwhy_precmd 2>/dev/null; then
+    precmd_functions+=(_cmdwhy_precmd)
+fi
+"""
+
+FISH_HOOK = r"""# cmdwhy shell hook（由 cmdwhy hook install 生成，可重复安装）
+if set -q _CMDWHY_HOOK_LOADED
+    return
+end
+set -g _CMDWHY_HOOK_LOADED 1
+set -g _CMDWHY_CMD ""
+
+function _cmdwhy_preexec --on-event fish_preexec
+    set -g _CMDWHY_CMD $argv
+end
+
+function _cmdwhy_record --on-event fish_prompt
+    set -l ec $status
+    if not set -q _CMDWHY_CMD
+        return
+    end
+    set -l cmd $_CMDWHY_CMD
+    set -e _CMDWHY_CMD
+    test -z "$cmd"; and return
+    string match -q 'cmdwhy*' -- $cmd; and return
+    test "$cmd" = exit; and return
+    test "$cmd" = logout; and return
+    set -l distro (sed -n 's/^PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release 2>/dev/null)
+    command __CMDWHY__ record --exit $ec --cmd "$cmd" --cwd "$PWD" --shell fish --distro "$distro" >/dev/null 2>&1
+end
 """
 
 
@@ -90,8 +133,13 @@ def invocation():
     return shlex.quote(sys.executable) + " -m cmdwhy"
 
 
+HOOKS = {"bash": BASH_HOOK, "zsh": ZSH_HOOK, "fish": FISH_HOOK}
+
+
 def hook_script(shell, cfg):
-    template = BASH_HOOK if shell == "bash" else ZSH_HOOK
+    template = HOOKS.get(shell)
+    if template is None:
+        raise ValueError("不支持的 shell：%s" % shell)
     return template.replace("__CMDWHY__", invocation())
 
 
@@ -101,7 +149,11 @@ def hook_path(shell, cfg):
 
 def rc_path(shell):
     home = os.path.expanduser("~")
-    return os.path.join(home, ".bashrc" if shell == "bash" else ".zshrc")
+    if shell == "bash":
+        return os.path.join(home, ".bashrc")
+    if shell == "fish":
+        return os.path.join(home, ".config", "fish", "config.fish")
+    return os.path.join(home, ".zshrc")
 
 
 def install(cfg, shells=("bash", "zsh"), rc_override=None, print_only=False):
@@ -115,6 +167,7 @@ def install(cfg, shells=("bash", "zsh"), rc_override=None, print_only=False):
             continue
         atomic_write(path, script)
         rc = rc_override or rc_path(shell)
+        os.makedirs(os.path.dirname(os.path.abspath(rc)), exist_ok=True)
         block = "%s\nsource %s\n%s" % (BASH_MARK_START, shlex.quote(path), BASH_MARK_END)
         existing = ""
         if os.path.exists(rc):
@@ -133,7 +186,7 @@ def install(cfg, shells=("bash", "zsh"), rc_override=None, print_only=False):
     return messages
 
 
-def uninstall(cfg, shells=("bash", "zsh"), rc_override=None):
+def uninstall(cfg, shells=("bash", "zsh", "fish"), rc_override=None):
     messages = []
     for shell in shells:
         rc = rc_override or rc_path(shell)
@@ -163,7 +216,7 @@ def uninstall(cfg, shells=("bash", "zsh"), rc_override=None):
     return messages
 
 
-def status(cfg, shells=("bash", "zsh"), rc_override=None):
+def status(cfg, shells=("bash", "zsh", "fish"), rc_override=None):
     data = {
         "home": cfg.home,
         "store": cfg.store_path,

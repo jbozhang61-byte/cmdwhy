@@ -198,7 +198,7 @@ def build_parser():
 
     p = sub.add_parser("hook", help="安装/卸载/查看 shell hook（记录退出码与错误）")
     p.add_argument("action", choices=["install", "uninstall", "status"])
-    p.add_argument("--shell", action="append", choices=["bash", "zsh"], help="默认两个都装")
+    p.add_argument("--shell", action="append", choices=["bash", "zsh", "fish"], help="默认 bash + zsh，可加 --shell fish")
     p.add_argument("--rc", help="写入指定 rc 文件（测试用）")
     p.add_argument("--print", action="store_true", help="只打印脚本，不改文件")
     p.set_defaults(func=cmd_hook)
@@ -306,7 +306,7 @@ HELP_DESCRIPTIONS = {
     "fix": "检查命令输入：在 PATH、合法子命令和你成功用过的历史里找最像的命令，给出可直接执行的修正。",
     "diagnose": "检索同类错误：按错误签名或原文相似度，给出你以前验证有效的修法，以及 Ubuntu 通用处置建议。",
     "kb": "查看、检索、导出或清空本地错误知识库（错误签名 -> 修复步骤）。",
-    "hook": "安装/卸载/查看 bash、zsh hook。hook 会把退出码、cwd、发行版写入事件文件，让之后的注解置信度更高。",
+    "hook": "安装/卸载/查看 bash、zsh、fish hook。hook 会把退出码、cwd、发行版写入事件文件，让之后的注解置信度更高。",
     "record": "内部命令：由 shell hook 调用，记录单条命令。一般不需要手动执行。",
     "run": "包装执行命令：捕获 stdout/stderr、记录退出码；失败后即时诊断，可自动执行安全的修正。",
     "doctor": "自检：Python 版本、数据目录可写性、历史来源、hook 安装状态、Git、command-not-found、知识库。",
@@ -523,6 +523,7 @@ def cmd_explain(args, cfg, renderer):
         for seq in seqs:
             item = analysis.ann(seq).to_dict()
             item["hist_id"] = analysis.event(seq).hist_id
+            item["uid"] = analysis.event(seq).uid
             item["cmd"] = analysis.event(seq).cmd
             payload.append(item)
         _print_json(payload)
@@ -904,6 +905,17 @@ def cmd_run_cli(args, cfg, renderer):
     )
 
 
+def _autopilot_actions(plan, allow_medium=False):
+    return [
+        action
+        for action in plan.actions
+        if action.executable
+        and action.risk != "high"
+        and (action.risk == "low" or (allow_medium and action.risk == "medium"))
+        and safe_to_autofix(action.command)
+    ]
+
+
 def cmd_do(args, cfg, renderer):
     if cfg.autopilot == "off" and not args.dry_run:
         print("自动完成已关闭。先运行：cmdwhy mode suggest")
@@ -924,11 +936,19 @@ def cmd_do(args, cfg, renderer):
     execute = not args.dry_run and (args.yes or cfg.autopilot == "auto")
     if not execute:
         return 0
-    runnable = [
-        action
-        for action in plan.actions
-        if action.executable and action.risk != "high" and safe_to_autofix(action.command)
-    ]
+    allow_medium = bool(args.yes)
+    runnable = _autopilot_actions(plan, allow_medium)
+    skipped = [action for action in plan.actions if action.risk in ("medium", "high")]
+    if skipped:
+        print("")
+        print(
+            renderer.p(
+                "跳过 %d 个需要确认或高风险的步骤（auto 只执行低风险；写操作需要 --yes）。" % len(skipped),
+                "yellow",
+            )
+        )
+        for action in skipped[:5]:
+            print("  · [%s] %s" % (action.risk, action.command))
     if not runnable:
         print("")
         print("没有可自动执行的安全步骤，请手动确认。")
@@ -938,7 +958,7 @@ def cmd_do(args, cfg, renderer):
     for action in runnable:
         print("")
         print(renderer.p("▶ " + action.command, "bold"))
-        code, stderr, duration, started = run_command(action.command)
+        code, stderr, duration, started = run_command(action.command, timeout=120)
         event = Event(
             ts=started,
             cmd=action.command,
@@ -1029,7 +1049,7 @@ def cmd_doctor(args, cfg, renderer):
     lines.append("  安全策略    危险命令识别 %s（示例：%s）" % ("正常" if danger else "异常", why or "-"))
     lines.append("")
     lines.append("  建议")
-    if not info["shells"][0]["installed"] and not info["shells"][1]["installed"]:
+    if not any(item["installed"] for item in info["shells"]):
         lines.append("    - 运行 cmdwhy hook install，让新命令带上退出码与工作目录")
     if not sources:
         lines.append("    - 用 cmdwhy ingest --file ~/.bash_history 指定历史文件")

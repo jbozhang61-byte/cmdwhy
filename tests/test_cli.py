@@ -330,6 +330,18 @@ class CliTest(unittest.TestCase):
         self.assertTrue(payload)
         self.assertIn("events", payload[0])
 
+
+    def test_explain_by_stable_id(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        payload = json.loads(self.run_cli("history", "--json", "--all", expect=0).stdout)
+        rows = payload["rows"]
+        uid = rows[0]["uid"]
+        self.assertTrue(uid)
+        text = self.run_cli("explain", "e" + uid, expect=0).stdout
+        self.assertIn("稳定 ID", text)
+        self.assertIn(rows[0]["cmd"], text)
+
     def test_search_filters(self):
         path = self.write_events()
         self.run_cli("ingest", "--file", path, expect=0)
@@ -473,7 +485,7 @@ class CliTest(unittest.TestCase):
 
     def test_version(self):
         proc = self.run_cli("version", expect=0)
-        self.assertIn("cmdwhy 0.1.0", proc.stdout)
+        self.assertIn("cmdwhy 0.2.0", proc.stdout)
 
     def test_analyze_demo_file(self):
         proc = self.run_cli("analyze", "examples/demo_history.jsonl", "-n", "4", expect=0)

@@ -56,6 +56,27 @@ class PlannerTest(unittest.TestCase):
         self.assertIn("git pull --rebase", commands)
         self.assertIn("git push origin main", commands)
 
+    def test_risk_boundaries(self):
+        permission = build_plan(self.analysis(), cwd=self.home, focus_seq=18)
+        sudo_actions = [a for a in permission.actions if a.command.startswith("sudo ")]
+        self.assertTrue(sudo_actions)
+        self.assertTrue(all(a.risk == "high" for a in sudo_actions))
+        git = build_plan(self.analysis(), cwd=self.home, focus_seq=45)
+        pull = [a for a in git.actions if a.command == "git pull --rebase"][0]
+        self.assertEqual(pull.risk, "medium")
+        port = build_plan(self.analysis(), cwd=self.home, focus_seq=23)
+        self.assertTrue(all(a.risk == "low" for a in port.actions))
+
+    def test_autopilot_filter_never_allows_high(self):
+        from cmdwhy.cli import _autopilot_actions
+
+        permission = build_plan(self.analysis(), cwd=self.home, focus_seq=18)
+        selected = _autopilot_actions(permission, allow_medium=True)
+        self.assertFalse(any(action.command.startswith("sudo ") for action in selected))
+        git = build_plan(self.analysis(), cwd=self.home, focus_seq=45)
+        self.assertFalse(any(action.risk == "medium" for action in _autopilot_actions(git, False)))
+        self.assertTrue(any(action.risk == "medium" for action in _autopilot_actions(git, True)))
+
     def test_no_dangerous_actions(self):
         analysis = self.analysis()
         for seq in (14, 18, 23, 45):

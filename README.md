@@ -95,7 +95,7 @@ cmdwhy: 已自动改正并执行成功。
 
 手动方式仍然可用：`cmdwhy fix "git stauts"`、`cw run --fix --yes -- git stauts`。
 
-除了拼写错误，`--fix` 还会针对错误类型给出可执行修正：脚本没有执行位 → `chmod +x`；Docker 权限 → `sudo`；Git 推送被拒 → `git pull --rebase`；PEP 668 → 创建 venv；缺少 Python 模块 → `pip install`。`autocorrect` 自动执行其中身份明确、低风险的一类（拼写、sudo、chmod）；如果同类错误在知识库里有验证过的修法，也会按步骤自动执行（仍然只限安全步骤）。
+除了拼写错误，`--fix` 还会针对错误类型给出可执行修正：脚本没有执行位 → `chmod +x`；Docker 权限 → `sudo`；Git 推送被拒 → `git pull --rebase`；PEP 668 → 创建 venv；缺少 Python 模块 → `pip install`。`autocorrect` 只自动执行身份明确、无提权的一类（拼写、chmod）；sudo 修正必须显式 `cw run --fix --yes`。如果同类错误在知识库里有验证过且不含 sudo 的修法，也会按步骤自动执行。
 
 ### 2. 根据上下文推断下一步
 
@@ -127,7 +127,7 @@ cmdwhy mode auto
 cmdwhy do
 ```
 
-自动模式只执行**低/中风险且通过安全检查**的步骤；`rm`、`dd`、`mkfs`、关机、递归改权限等高风险命令永远不会自动执行。每一步都会记录到 cmdwhy，失败即停。
+自动模式只自动执行**低风险**步骤；中风险写操作（创建 venv、pip/npm 安装、chmod、git pull/push）需要 `cmdwhy do --yes` 明确确认；sudo、apt/systemctl、`rm`、`dd`、`mkfs`、关机等高风险命令永远不会自动执行。每步 120 秒超时，失败即停。
 
 ```bash
 cmdwhy do --yes       # suggest 模式下，确认执行计划
@@ -139,7 +139,7 @@ cmdwhy mode suggest   # 恢复为只建议（默认）
 安全边界：
 
 - 默认 `suggest`，`auto` 必须手动开启；
-- 只执行白名单风格的低/中风险步骤；高风险直接跳过；
+- auto 只执行低风险；中风险必须 `--yes`；高风险永不执行；
 - 不执行 `cd`、`source`、`export` 这类无法影响父 shell 的命令；
 - 含 `<包名>` 等占位符的建议不会执行；
 - 执行失败立刻停止，不会继续“硬猜”；
@@ -237,7 +237,7 @@ cmdwhy hook install    # 关键：让之后的命令带上退出码和错误原�
 exec bash -l           # 或新开终端，让 hook 生效
 ```
 
-`hook install` 会往 `~/.bashrc` / `~/.zshrc` 追加一小段配置，并在数据目录生成 hook 脚本。它通过 `PROMPT_COMMAND` / `precmd_functions` 在每次提示符出现前，把上一条命令的**退出码、cwd、发行版，以及 shell 的 history 编号**写进 `events.jsonl`。连续两次执行同一条命令也会分别记录，因为它们的 history 编号不同。命令本身仍在你的 shell 里执行，cmdwhy 只旁路记录。
+`hook install` 会往 `~/.bashrc` / `~/.zshrc` 追加配置，`--shell fish` 时写入 `~/.config/fish/config.fish`，并在数据目录生成 hook 脚本。bash 用 `PROMPT_COMMAND`（兼容 5.1+ 的数组形式），zsh 用 `preexec` + `precmd`，fish 用 `fish_preexec` + `fish_prompt`。它把上一条命令的**退出码、cwd、发行版和 history 编号（有则记录）**写进 `events.jsonl`；连续两次执行同一条命令也会分别记录。命令本身仍在 shell 里执行，cmdwhy 只旁路记录。
 
 ### 没有时间戳的旧历史也能分析
 
@@ -273,12 +273,26 @@ history | cmdwhy ingest --stdin    # 不落文件，直接导入
 history | cmdwhy analyze --stdin   # 只看一次，不写库
 ```
 
-时间线会同时显示两套编号：`#18` 是 cmdwhy 的分析序号，`h518` 是 history 编号；修复链里的 `#19` 仍然指分析序号。数字参数的解析优先级是：
+时间线会同时显示三套标识：
 
-1. 带 `#` 前缀（`#18`）→ 分析序号；
-2. 带 `h` 前缀（`h518`）→ history 编号；
-3. 纯数字（`518`）→ 先找 history 编号，找不到再当分析序号；
-4. 区间：`518-520` 有 history 编号时按编号区间，否则按分析序号区间；`#18-20`、`seq:18-20`、`h518-520` 可强制指定编号体系。
+- `#18`：当前分析顺序。**新增/导入更早的历史后会漂移**，只适合当前视图；
+- `h518`：shell 的 history 编号，稳定但旧历史可能没有；
+- `e1a2b3c4`：cmdwhy 的稳定 ID，落盘时生成，**新增历史后仍指向同一条命令**。
+
+修复链、后续命令、报告里的引用会显示成 `#18[e1a2b3c4]`，其中 e 开头的是稳定 ID。推荐用稳定 ID 定位：
+
+`@bash
+cmdwhy explain e1a2b3c4
+cmdwhy explain uid:e1a2b3c4
+`@
+
+数字参数的解析优先级是：
+
+1. `e...` / `uid:e...` → 稳定 ID；
+2. 带 `#` 前缀（`#18`）→ 分析序号；
+3. 带 `h` 前缀（`h518`）→ history 编号；
+4. 纯数字（`518`）→ 先找 history 编号，找不到再当分析序号；
+5. 区间：`518-520` 有 history 编号时按编号区间，否则按分析序号区间；`#18-20`、`seq:18-20`、`h518-520` 可强制指定编号体系。
 
 `history` 输出不含 cwd，导入后环境会显示“环境未知”，不会拿你**当前**目录冒充当时目录；想要完整环境，用 hook 或带上 cwd 的 JSONL。
 
@@ -318,7 +332,7 @@ cmdwhy history --grep status
 | `cmdwhy ingest [--file 路径] [--stdin]` | 导入历史（也支持 history 管道输入），学习错误→修复的知识库 |
 | `cmdwhy analyze 文件... [--stdin]` | 只分析指定历史文件或标准输入，不改配置、不写知识库 |
 | `cmdwhy timeline [-n N] [--session S2]` | 按会话展示命令、环境、动机、报错、修复链 |
-| `cmdwhy explain 518 [--context 40]` / `'#18'` / `518-520` | 按编号解释命令：任务上下文、目的、依据、建议、后续；可调前后窗口 |
+| `cmdwhy explain 518` / `'#18'` / `e1a2b3c4` | 按 history 编号、当前序号或稳定 ID 解释命令；可调前后窗口 |
 | `cmdwhy report [--md 文件]` | 生成“报错 / 改变 / 添加 / 随机”四段式复盘 |
 | `cmdwhy export --format md -o 文件` | 导出 json / md / timeline / report |
 | `cmdwhy stats` | 错误率、意图分布、修复耗时（MTTR）、sudo 比例 |
@@ -333,7 +347,7 @@ cmdwhy history --grep status
 | `cmdwhy fix --last` | 检查上一条失败命令的输入 |
 | `cmdwhy diagnose` / `--text "错误输出"` | 检索同类错误，给出你以前的修法和通用建议 |
 | `cmdwhy kb` / `--signature PERM:dpkg-lock` / `--export` | 查看、检索、导出错误知识库 |
-| `cmdwhy hook install / uninstall / status` | 管理 shell hook |
+| `cmdwhy hook install [--shell fish]` | 管理 bash / zsh / fish hook |
 | `cmdwhy run [--shell] -- 命令` | 包装执行，捕获 stderr 并即时诊断；--shell 支持管道/重定向 |
 | `cmdwhy do [--dry-run] [--yes]` | 根据最近命令和环境推断下一步，可执行安全步骤 |
 | `cmdwhy mode suggest/auto/off` | 自动完成开关 |
@@ -568,14 +582,14 @@ $ cmdwhy fix "gti status"
 - `context_window`：判断“当时在干什么”时前后各看多少条，默认 20；
 - `max_events`：最多分析多少条（默认取最近 5000 条）；
 - `learn`：设为 `false` 时 `ingest` 不写知识库（仍可手动 `cmdwhy kb --learn`）；
-- `autopilot`：`off` / `suggest` / `auto`，控制 `cmdwhy do`；
+- `autopilot`：`off` / `suggest` / `auto`；auto 只跑低风险，中风险需 `--yes`；
 - `autocorrect`：`cw run` 失败时是否自动执行高可信修正；
 - `ignore_prefixes`：不记录/不分析的命令前缀。
 
 ## 局限（先说实话）
 
-1. **还没在 Ubuntu 桌面/VM 的默认终端里验收**；本次已在 Ubuntu 24.04 WSL 上原生跑通 144 个测试和 hook 交互式测试。旧 bash 历史没有退出码时，失败只能靠上下文推断，置信度是低/中。
-2. **hook 只覆盖 bash / zsh**。fish 可以导入历史，但没有实时退出码 hook。其他 shell 可以把事件按上面的 JSON 格式写进 `events.jsonl`。
+1. **还没在 Ubuntu 桌面图形终端里做真人输入验收**；WSL 和 VMware 的 bash/zsh/fish 已通过伪终端实测。旧 bash 历史没有退出码时，失败只能靠上下文推断，置信度是低/中。
+2. **hook 覆盖 bash / zsh / fish**；其他 shell 仍可把事件按 JSON 写进 `events.jsonl`。
 3. **历史里的 cwd 可能已经不存在**，这时项目类型、Git 分支、venv 只能靠 hook 当时记录或留空，不会瞎猜。
 4. **不拦截命令输出**。想拿到精确 stderr，用 `cw run -- 命令` 或 `cmdwhy run -- 命令`；它会把 stderr 尾部记入事件并立即诊断。
 5. **修复链是启发式**，不是因果证明。它给出的是“最可能”的解释，并明确标出置信度和验证状态。
@@ -587,17 +601,17 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-两边都是 **158 个测试全部通过**。VMware 里还做了真实交互式 bash + hook 测试：连续两次相同的 `git status` 被分别记录为 hist=3、hist=4；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
+两边都是 **167 个测试全部通过**。VMware 里做了真实交互式 bash + hook 测试；WSL 里另外实测了 zsh 5.9、fish 3.7 的 hook：连续两次相同的 `git status` 分别记录，`git stauts` 退出码为 1；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 
-仍未覆盖：Ubuntu 桌面图形终端、zsh / fish 实机、上千条真实历史、Ubuntu 20.04/22.04 回归。
+仍未覆盖：Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04/22.04 回归。
 
 
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 158 个测试
+python3 -m unittest discover -s tests -v   # 167 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -631,7 +645,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             158 个单元 + 端到端 CLI 测试
+├── tests/             167 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile
