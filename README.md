@@ -587,7 +587,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-两边都是 **144 个测试全部通过**。VMware 里还做了真实交互式 bash + hook 测试：连续两次相同的 `git status` 被分别记录为 hist=3、hist=4；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
+两边都是 **158 个测试全部通过**。VMware 里还做了真实交互式 bash + hook 测试：连续两次相同的 `git status` 被分别记录为 hist=3、hist=4；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 

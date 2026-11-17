@@ -11,12 +11,12 @@
 | Python | 3.12.3 | 3.12.3 |
 | bash | 5.2.21 | 5.2.21 |
 | git | 2.43.0 | 2.43.0 |
-| 测试 | 144 passed | 144 passed |
-| 用时 | 25.8s | 7.2s |
+| 测试 | 158 passed | 158 passed |
+| 用时 | 31.6s | 9.3s |
 
 ## 验证过的功能
 
-- python3 -m unittest discover -s tests：144 个测试全部通过；
+- python3 -m unittest discover -s tests：158 个测试全部通过；
 - cmdwhy demo：时间线、任务上下文、history 编号显示正常；
 - cmdwhy fix "git stauts"：干净环境下判定为高可信度，建议 git status；
 - cmdwhy ingest + cmdwhy history --duplicates --all：重复的 git status 分别编号；
@@ -27,6 +27,8 @@
     - git stauts 退出码 1；
     - 连续两次 git status 分别记录为 hist=3、hist=4；
     - --duplicates 能显示“第 1/2 次、第 2/2 次”；
+- cmdwhy search --error PORT --since 7d：按错误和时间搜索；
+- cmdwhy summary --session S2：按会话总结任务、报错、修复和改变；
 - cmdwhy do --from 1 --dry-run：从指定命令推断下一步；
 - cmdwhy mode、cmdwhy doctor：状态与自检正常。
 
