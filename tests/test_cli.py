@@ -318,6 +318,38 @@ class CliTest(unittest.TestCase):
         self.assertIn("未验证", proc.stdout)
         self.assertNotIn("你以前这样修好过", proc.stdout)
 
+
+
+    def test_summary(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        text = self.run_cli("summary", "--all", expect=0).stdout
+        self.assertIn("会话概要", text)
+        self.assertIn("S1", text)
+        payload = json.loads(self.run_cli("summary", "--json", expect=0).stdout)
+        self.assertTrue(payload)
+        self.assertIn("events", payload[0])
+
+    def test_search_filters(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        proc = self.run_cli("search", "git", expect=0)
+        self.assertIn("git puhs", proc.stdout)
+        fails = self.run_cli("search", "--status", "fail", expect=0)
+        self.assertIn("git puhs", fails.stdout)
+        self.assertIn("apt install jq", fails.stdout)
+        errors = self.run_cli("search", "--error", "PERM", expect=0)
+        self.assertIn("apt install jq", errors.stdout)
+        self.assertNotIn("git status", errors.stdout)
+        rows = json.loads(self.run_cli("search", "git", "--json", expect=0).stdout)
+        self.assertEqual(len(rows), 3)
+        self.assertIn("hist_id", rows[0])
+
+    def test_search_bad_time(self):
+        self.write_events()
+        proc = self.run_cli("search", "ls", "--since", "not-a-time", expect=2)
+        self.assertIn("无法识别的时间", proc.stderr)
+
     def test_mode_toggles(self):
         status = self.run_cli("mode", expect=0).stdout
         self.assertIn("suggest", status)

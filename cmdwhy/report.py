@@ -240,6 +240,113 @@ class Renderer:
         lines.append(p("重复命令会显示“第 k/n 次”，每个编号对应一次具体执行，可直接 cmdwhy explain <编号>。", "grey"))
         return "\n".join(lines).rstrip()
 
+    # ------------------------------------------------------------ 会话概要
+
+    def render_summary(self, analysis, sessions):
+        p = self.p
+        lines = [p.bold("会话概要") + "  " + p("%d 个会话" % len(sessions), "grey")]
+        for session in sessions:
+            lines.append("")
+            lines.append(
+                p.bold("── " + session.sid)
+                + "  "
+                + p(
+                    "%s · %s · %s"
+                    % (
+                        fmt_span(session.start_ts, session.end_ts),
+                        fmt_duration(session.duration) if session.duration else "时长未知",
+                        self._env_line(session.env),
+                    ),
+                    "grey",
+                )
+            )
+            fails = [analysis.ann(event.seq) for event in session.events if analysis.ann(event.seq).status in ("fail", "suspected")]
+            fixes = [analysis.ann(event.seq) for event in session.events if analysis.ann(event.seq).steps]
+            verified = sum(1 for ann in fixes if ann.verified)
+            lines.append(
+                "   %d 条命令 · %d 处报错 · %d 个修复动作%s"
+                % (session.n, len(fails), len(fixes), "（%d 已验证）" % verified if verified else "")
+            )
+            tasks = []
+            for event in session.events:
+                task = analysis.ann(event.seq).task
+                if task and task != "日常操作" and task not in tasks:
+                    tasks.append(task)
+            if tasks:
+                lines.append("   任务  " + " · ".join(tasks[:4]))
+            error_counts = Counter(ann.error.signature for ann in fails if ann.error is not None)
+            if error_counts:
+                lines.append(
+                    "   错误  "
+                    + " · ".join("%s ×%d" % (name, count) for name, count in error_counts.most_common(4))
+                )
+            steps = []
+            for ann in fixes:
+                for step in ann.steps:
+                    if step not in steps:
+                        steps.append(step)
+            if steps:
+                lines.append("   修复  " + " › ".join(truncate(step, 34) for step in steps[:4]))
+            changes = []
+            for event in session.events:
+                for change in analysis.ann(event.seq).changes:
+                    if change not in changes:
+                        changes.append(change)
+            if changes:
+                lines.append("   改变  " + " · ".join(changes[:4]))
+        return "\n".join(lines).rstrip()
+
+    # ------------------------------------------------------------ 搜索
+
+    def render_search(self, analysis, results, total=0, query="", filters=None):
+        p = self.p
+        title = p.bold("命令搜索")
+        meta = []
+        if query:
+            meta.append("关键词：" + query)
+        for item in filters or []:
+            meta.append(item)
+        meta.append("显示 %d / 共 %d 条" % (len(results), total))
+        lines = [title + "  " + p(" · ".join(meta), "grey")]
+        if not results:
+            lines.append("")
+            lines.append("没有匹配的命令。")
+            return "\n".join(lines)
+        lines.append("")
+        for result in results:
+            status = {
+                "ok": ("✓", "green"),
+                "fail": ("✗", "red"),
+                "suspected": ("?", "yellow"),
+                "unknown": ("·", "grey"),
+            }.get(result.status, ("·", "grey"))
+            error = ("  " + p(result.error, "red")) if result.error else ""
+            lines.append(
+                "  #%-3d %s  %s  %s  %s%s"
+                % (
+                    result.seq,
+                    p(("h%d" % result.hist_id).ljust(6) if result.hist_id is not None else " " * 6, "grey"),
+                    fmt_time(result.ts),
+                    p(status[0], status[1]),
+                    p(truncate(result.cmd, 70), "bold"),
+                    error,
+                )
+            )
+            detail = []
+            if result.task:
+                detail.append(result.task)
+            if result.intent:
+                detail.append(result.intent)
+            if result.project:
+                detail.append(result.project)
+            if result.cwd:
+                detail.append(self._path(result.cwd, 28))
+            if detail:
+                lines.append("       " + p(" · ".join(detail), "grey"))
+        lines.append("")
+        lines.append(p("查看详情：cmdwhy explain <编号>（history 编号或 #分析序号）", "grey"))
+        return "\n".join(lines).rstrip()
+
     # ------------------------------------------------------------ 下一步计划
 
     def render_plan(self, analysis, plan, mode="suggest"):

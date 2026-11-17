@@ -33,9 +33,11 @@ cmdwhy --no-color timeline   # 适合重定向到文件
 | `report` | 四段式复盘 | 写复盘、周报 |
 | `stats` | 统计 | 看错误率、修复耗时 |
 | `sessions` | 会话列表 | 先定位会话编号 |
+| `summary` | 按会话总结 | 快速回顾一次会话 |
 | `changes` | 环境/状态变化 | 看安装了什么、切了什么分支 |
 | `additions` | 首次出现的新命令 | 回顾新工具 |
 | `history` | history 风格编号列表 | 重复命令要区分是哪一次 |
+| `search` | 搜索命令/错误/时间/项目 | 查找某类操作 |
 | `digest` | 随机回看会话 | 随机抽查自己的操作 |
 | `fix` | 输入纠错 | 命令打错、找不到命令 |
 | `diagnose` | 同类错误检索 | 又遇到熟悉的报错 |
@@ -164,6 +166,48 @@ cmdwhy history --json
 - 有 history 输出编号时显示原编号（如 `502`）；没有时显示 `#分析序号`；
 - `--duplicates` 只列重复命令，方便看清“同一命令的多次执行”；
 - 编号可以直接交给 `cmdwhy explain`，重复命令不会混淆。
+
+### cmdwhy search
+
+按关键词、错误、状态、时间、项目、会话搜索，结果保留 history 编号：
+
+`@bash
+cmdwhy search flask
+cmdwhy search --error PORT --since 7d
+cmdwhy search --status fail --project api
+cmdwhy search --session S2 --oldest
+cmdwhy search --since today --until "2026-11-17 18:00"
+cmdwhy search git --json
+`@
+
+- 多个关键词是 AND；匹配命令文本、意图、任务、目的、错误签名/原文、项目名、cwd；
+- `--status`：`ok` / `fail` / `unknown`（`fail` 包含疑似失败）；
+- `--error`：按错误签名或类别子串匹配，如 `PORT:3000`、`PERM`；
+- `--since/--until`：`7d`、`24h`、`30m`、`2w`、`today`、`yesterday`、`2026-11-17 [HH:MM]`；
+- `--limit 0` 显示全部，`--oldest` 按时间正序；
+- 无时间戳的旧历史在带时间过滤时排除。
+
+### cmdwhy summary
+
+`@bash
+cmdwhy summary
+cmdwhy summary --session S2
+cmdwhy summary --all
+cmdwhy summary --json
+`@
+
+每条会话输出：命令数、报错数、修复动作与验证数、主要任务、错误签名、修复步骤、环境改变。
+
+`@text
+── S2  11:40–12:07 · 27m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
+   13 条命令 · 4 处报错 · 4 个修复动作（4 已验证）
+   任务  Ubuntu 软件包管理 · 脚本执行权限 · Node 开发服务 · Docker 与容器
+   错误  PERM:dpkg-lock ×1 · PERM:exec ×1 · PORT:3000 ×1 · DOCKER ×1
+   修复  sudo apt install jq -y › chmod +x deploy.sh › kill 4242 › sudo docker ps
+   改变  安装软件包 jq · 修改权限 +x deploy.sh · 结束进程 4242
+`@
+
+默认显示最近 5 个会话，`--all` 显示全部。
 
 ### cmdwhy timeline
 

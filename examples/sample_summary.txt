@@ -1,0 +1,34 @@
+会话概要  5 个会话
+
+── S1  09:12–09:42 · 30m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
+   17 条命令 · 4 处报错 · 4 个修复动作（4 已验证）
+   任务  Python 依赖与环境
+   错误  MODULE:flask ×1 · PIP668 ×1 · CMD_NOT_FOUND:pytest ×1 · CMD_NOT_FOUND:puhs ×1
+   修复  sudo apt install python3-venv -y › python3 -m venv .venv › source .venv/bin/activate › pip install pytest
+   改变  安装软件包 python3-venv · 创建虚拟环境 .venv · 修改 shell 环境（source .venv/bin/activate） · 安装 Python 依赖 requirements.txt
+
+── S2  11:40–12:07 · 27m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
+   13 条命令 · 4 处报错 · 4 个修复动作（4 已验证）
+   任务  Ubuntu 软件包管理 · 脚本执行权限 · Node 开发服务 · Docker 与容器
+   错误  PERM:dpkg-lock ×1 · PERM:exec ×1 · PORT:3000 ×1 · DOCKER ×1
+   修复  sudo apt install jq -y › chmod +x deploy.sh › kill 4242 › sudo docker ps
+   改变  安装软件包 jq · 修改权限 +x deploy.sh · 结束进程 4242
+
+── S3  15:05–15:23 · 18m00s · ~/infra · infra · git:main · Ubuntu 24.04
+   14 条命令 · 2 处报错 · 2 个修复动作（1 已验证）
+   任务  系统服务运维
+   错误  PERM ×2
+   修复  sudo nginx -t › sudo systemctl reload nginx
+   改变  切换目录 /home/ubuntu/work/api/web → /home/ubuntu/infra · 编辑文件 nginx.conf · 重载服务 nginx
+
+── S4  18:20–18:34 · 14m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
+   9 条命令 · 1 处报错 · 1 个修复动作
+   任务  Git 同步与提交
+   错误  GIT_REJECT:fetch-first ×1
+   修复  git pull --rebase
+   改变  同步远端 · 推送远端 · 切换分支/版本 → fix/port-config · 提交改动
+
+── S5  21:00–21:12 · 12m00s · ~ · Ubuntu 24.04
+   9 条命令 · 0 处报错 · 0 个修复动作
+   任务  Ubuntu 软件包管理 · 系统服务运维
+   改变  升级系统软件包 · 重启服务 nginx

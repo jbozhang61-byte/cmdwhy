@@ -1,0 +1,24 @@
+命令搜索  关键词：git · 显示 10 / 共 15 条
+
+  #53  h553    18:34:00  ·  git push
+       Git 同步与提交 · 推送远端 · api · ~/work/api
+  #52  h552    18:33:00  ·  git commit -m "fix: use env port"
+       Git 同步与提交 · 提交改动 · api · ~/work/api
+  #51  h551    18:32:00  ·  git add -A
+       Git 同步与提交 · 暂存改动 · api · ~/work/api
+  #50  h550    18:28:00  ·  python3 -m pytest -q
+       Git 同步与提交 · 运行测试 · api · ~/work/api
+  #49  h549    18:25:00  ·  git checkout -b fix/port-config
+       Git 同步与提交 · 切换分支/文件 · api · ~/work/api
+  #48  h548    18:22:00  ·  git log --oneline -5
+       Git 同步与提交 · 查看提交历史 · api · ~/work/api
+  #47  h547    18:21:00  ·  git push origin main
+       Git 同步与提交 · 推送远端 · api · ~/work/api
+  #46  h546    18:20:30  ·  git pull --rebase
+       Git 同步与提交 · 同步远端后重试 · api · ~/work/api
+  #45  h545    18:20:00  ?  git push origin main  GIT_REJECT:fetch-first
+       Git 同步与提交 · 推送远端 · api · ~/work/api
+  #17  h517    09:42:00  ✓  git checkout -b feat/history-why
+       Python 依赖与环境 · 切换分支/文件 · api · ~/work/api
+
+查看详情：cmdwhy explain <编号>（history 编号或 #分析序号）

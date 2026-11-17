@@ -28,6 +28,7 @@ from .report import Renderer, analysis_to_dict, build_history_rows
 from .resolve import resolve_targets
 from .runner import cmd_run, run_command
 from .safety import danger_of, safe_to_autofix
+from .search import parse_time, search_events
 from .sources import PARSERS, append_event, detect_format, load_events, merge_events, parse_bash
 from .typo import CorpusIndex, propose_fixes
 from .util import Paint, atomic_write, color_enabled, fmt_datetime, truncate, write_json
@@ -138,6 +139,11 @@ def build_parser():
     p = sub.add_parser("sessions", help="列出会话及每个会话的环境")
     p.set_defaults(func=cmd_sessions)
 
+    p = sub.add_parser("summary", help="按会话总结：在做什么、错在哪、怎么修的")
+    p.add_argument("--session", help="只看某个会话，如 S2")
+    p.add_argument("--all", action="store_true", help="显示全部会话（默认最近 5 个）")
+    p.set_defaults(func=cmd_summary)
+
     p = sub.add_parser("changes", help="列出环境/状态变化（cd、安装、分支、服务…）")
     p.set_defaults(func=cmd_changes)
 
@@ -151,6 +157,18 @@ def build_parser():
     p.add_argument("--grep", help="只显示包含该文本的命令")
     p.add_argument("--duplicates", action="store_true", help="只显示出现多次的命令")
     p.set_defaults(func=cmd_history)
+
+    p = sub.add_parser("search", help="按关键词、错误、时间、项目搜索历史")
+    p.add_argument("query", nargs="*", help="关键词；多个词需要全部匹配")
+    p.add_argument("--status", choices=["ok", "fail", "unknown"], help="按状态过滤")
+    p.add_argument("--error", help="按错误签名/类别过滤，如 PORT:3000、PERM")
+    p.add_argument("--session", help="只看某个会话，如 S2")
+    p.add_argument("--project", help="按项目或 cwd 过滤")
+    p.add_argument("--since", help="起始时间：7d / 24h / today / 2026-11-17")
+    p.add_argument("--until", help="结束时间，格式同上")
+    p.add_argument("-n", "--limit", type=int, default=30, help="最多显示多少条，0 表示全部")
+    p.add_argument("--oldest", action="store_true", help="按时间正序（默认最新在前）")
+    p.set_defaults(func=cmd_search)
 
     p = sub.add_parser("digest", help="随机回看几个会话（随机）")
     p.add_argument("--random", type=int, default=2)
@@ -280,8 +298,10 @@ HELP_DESCRIPTIONS = {
     "stats": "统计命令数、会话数、错误率、修复链与平均修复耗时、意图分布、常用命令、高频错误。",
     "sessions": "列出所有会话的起止时间、环境、命令数、报错数和修复动作数。",
     "changes": "列出会改变环境/状态的命令：cd、安装、创建目录、改权限、切分支、重启服务、结束进程。",
+    "summary": "按会话总结：任务、报错、修复动作、验证状态和环境改变。适合快速回顾“这次会话到底做了什么”。",
     "additions": "列出第一次出现的命令，适合回顾新项目/新环境里引入的工具。",
     "history": "像 shell 内建 history 一样列出带编号的命令。重复命令会显示“第 k/n 次”，每个编号对应一次具体执行，可直接 cmdwhy explain <编号>。",
+    "search": "按关键词、错误签名、状态、时间、项目和会话搜索历史命令，结果保留 history 编号，可以直接 explain。",
     "digest": "随机抽取几个会话做回顾，默认输出意图、报错和修复动作。",
     "fix": "检查命令输入：在 PATH、合法子命令和你成功用过的历史里找最像的命令，给出可直接执行的修正。",
     "diagnose": "检索同类错误：按错误签名或原文相似度，给出你以前验证有效的修法，以及 Ubuntu 通用处置建议。",
@@ -306,8 +326,10 @@ HELP_EXAMPLES = {
     "report": "  cmdwhy report\n  cmdwhy report --sections errors,changes\n  cmdwhy report --md report.md",
     "stats": "  cmdwhy stats\n  cmdwhy stats --json",
     "changes": "  cmdwhy changes",
+    "summary": "  cmdwhy summary\n  cmdwhy summary --session S2\n  cmdwhy summary --all",
     "additions": "  cmdwhy additions",
     "history": "  cmdwhy history\n  cmdwhy history -n 100\n  cmdwhy history --duplicates\n  cmdwhy history --grep status",
+    "search": "  cmdwhy search flask\n  cmdwhy search --error PORT --since 7d\n  cmdwhy search --status fail --project api\n  cmdwhy search --json",
     "digest": "  cmdwhy digest --random 2 --seed 7",
     "fix": "  cmdwhy fix 'git stauts'\n  cmdwhy fix 'gti status'\n  cmdwhy fix --last",
     "diagnose": "  cmdwhy diagnose\n  cmdwhy diagnose --text 'error: externally-managed-environment'\n  cmdwhy diagnose --signature PERM:dpkg-lock --fix",
@@ -567,6 +589,57 @@ def cmd_sessions(args, cfg, renderer):
     return 0
 
 
+def cmd_summary(args, cfg, renderer):
+    analysis, meta = _analysis(cfg, with_context=True)
+    if not analysis.events:
+        print("没有命令记录。")
+        return 1
+    sessions = analysis.sessions
+    if args.session:
+        sessions = [session for session in sessions if session.sid == args.session]
+        if not sessions:
+            print("没有找到会话 %s。" % args.session)
+            return 1
+    elif not args.all:
+        sessions = sessions[-5:]
+    if args.json:
+        payload = []
+        for session in sessions:
+            fails = [
+                analysis.ann(event.seq)
+                for event in session.events
+                if analysis.ann(event.seq).status in ("fail", "suspected")
+            ]
+            tasks = []
+            fixes = []
+            for event in session.events:
+                task = analysis.ann(event.seq).task
+                if task and task not in tasks:
+                    tasks.append(task)
+                for step in analysis.ann(event.seq).steps:
+                    if step not in fixes:
+                        fixes.append(step)
+            payload.append(
+                {
+                    "sid": session.sid,
+                    "start_ts": session.start_ts,
+                    "end_ts": session.end_ts,
+                    "events": session.n,
+                    "failures": len(fails),
+                    "tasks": tasks,
+                    "errors": [
+                        ann.error.signature for ann in fails if ann.error is not None
+                    ],
+                    "fixes": fixes,
+                    "env": session.env.to_dict() if session.env is not None else None,
+                }
+            )
+        _print_json(payload)
+        return 0
+    print(renderer.render_summary(analysis, sessions))
+    return 0
+
+
 def cmd_changes(args, cfg, renderer):
     analysis, meta = _analysis(cfg)
     if args.json:
@@ -607,6 +680,47 @@ def cmd_history(args, cfg, renderer):
         )
     )
     return 0
+
+
+def cmd_search(args, cfg, renderer):
+    analysis, meta = _analysis(cfg, with_context=True)
+    try:
+        since_ts = parse_time(args.since)
+        until_ts = parse_time(args.until)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    query = " ".join(args.query).strip()
+    results, total = search_events(
+        analysis,
+        query=query,
+        status=args.status,
+        error=args.error,
+        since_ts=since_ts,
+        until_ts=until_ts,
+        session=args.session,
+        project=args.project,
+        limit=args.limit,
+        oldest=args.oldest,
+    )
+    if args.json:
+        _print_json([result.to_dict() for result in results])
+        return 0
+    filters = []
+    if args.status:
+        filters.append("状态=" + args.status)
+    if args.error:
+        filters.append("错误~" + args.error)
+    if args.session:
+        filters.append("会话=" + args.session)
+    if args.project:
+        filters.append("项目=" + args.project)
+    if args.since:
+        filters.append("从 " + args.since)
+    if args.until:
+        filters.append("到 " + args.until)
+    print(renderer.render_search(analysis, results, total=total, query=query, filters=filters))
+    return 0 if results else 1
 
 
 def cmd_digest(args, cfg, renderer):

@@ -145,7 +145,61 @@ cmdwhy mode suggest   # 恢复为只建议（默认）
 - 执行失败立刻停止，不会继续“硬猜”；
 - 所有步骤都记录为普通命令事件，可以事后用 `cmdwhy explain` 复查。
 
+## 搜索与过滤
+
+命令多了以后，可以按关键词、错误、状态、时间、项目、会话查：
+
+```bash
+cmdwhy search flask
+cmdwhy search --error PORT --since 7d
+cmdwhy search --status fail --project api
+cmdwhy search --session S2 --oldest
+cmdwhy search --since today --until "2026-11-17 18:00"
+cmdwhy search git --json
+```
+
+搜索范围包括命令文本、意图、任务、目的、错误签名/原文、项目名和 cwd；多个关键词是 AND。结果保留 history 编号，可以直接：
+
+```text
+命令搜索  关键词：flask · 显示 1 / 共 62 条
+
+  #3    h503   09:13  ✗  python3 app.py  MODULE:flask
+       Python 依赖与环境 · 运行 Python 脚本 · api · ~/work/api
+```
+
+时间参数支持：
+
+- `7d`、`24h`、`30m`、`2w`
+- `today` / `yesterday`
+- `2026-11-17`、`2026-11-17 09:00`
+
+没有时间戳的旧历史在带时间过滤时会被排除，避免误判。
+
+## 会话概要
+
+不想看逐条时间线时，可以按会话快速回顾“这次到底做了什么”：
+
+```bash
+cmdwhy summary
+cmdwhy summary --session S2
+cmdwhy summary --all
+cmdwhy summary --json
+```
+
+```text
+── S2  11:40–12:07 · 27m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
+   13 条命令 · 4 处报错 · 4 个修复动作（4 已验证）
+   任务  Ubuntu 软件包管理 · 脚本执行权限 · Node 开发服务 · Docker 与容器
+   错误  PERM:dpkg-lock ×1 · PERM:exec ×1 · PORT:3000 ×1 · DOCKER ×1
+   修复  sudo apt install jq -y › chmod +x deploy.sh › kill 4242 › sudo docker ps
+   改变  安装软件包 jq · 修改权限 +x deploy.sh · 结束进程 4242
+```
+
+每条会话会汇总：命令数、报错数、修复动作与验证数、主要任务、错误签名、修复步骤、环境改变。
+
 ## 安装
+
+
 
 ### 方式一：直接用，不安装
 
@@ -269,9 +323,11 @@ cmdwhy history --grep status
 | `cmdwhy export --format md -o 文件` | 导出 json / md / timeline / report |
 | `cmdwhy stats` | 错误率、意图分布、修复耗时（MTTR）、sudo 比例 |
 | `cmdwhy sessions` | 列出会话及每个会话的环境 |
+| `cmdwhy summary [--session S2]` | 按会话总结任务、报错、修复和环境改变 |
 | `cmdwhy changes` | 环境/状态变化：cd、安装、分支、服务、权限…… |
 | `cmdwhy additions` | 第一次出现的新命令 |
 | `cmdwhy history [--duplicates] [--grep 文本]` | 像 history 一样列出编号，重复命令分别编号 |
+| `cmdwhy search 关键词` / `--error` / `--since` / `--project` | 按关键词、错误、时间、项目搜索历史 |
 | `cmdwhy digest --random 2` | 随机回看几个会话 |
 | `cmdwhy fix "git stauts"` | 输入纠错，给出可直接执行的正确命令 |
 | `cmdwhy fix --last` | 检查上一条失败命令的输入 |
@@ -367,6 +423,8 @@ On branch master
 - `examples/sample_timeline.txt`：S2 会话逐条注解
 - `examples/sample_history.txt`：带编号的命令列表（含重复命令）
 - `examples/sample_plan.txt`：根据上下文推断出的下一步计划
+- `examples/sample_search.txt`：关键词搜索结果的编号与上下文
+- `examples/sample_summary.txt`：按会话总结的概览
 - `examples/sample_explain.txt`：三条命令的完整解释
 - `examples/sample_report.md`：四段式 Markdown 报告
 - `examples/demo_history.jsonl`：演示数据，可以直接 `cmdwhy ingest --file examples/demo_history.jsonl`
@@ -539,7 +597,7 @@ $ cmdwhy fix "gti status"
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 144 个测试
+python3 -m unittest discover -s tests -v   # 158 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -566,13 +624,14 @@ cmdwhy/
 │   ├── demo_data.py   内置演示数据
 │   ├── context.py     前后窗口任务推断与单条命令目的
 │   ├── planner.py     根据上下文和环境推断下一步（可自动执行）
+│   ├── search.py      关键词/错误/时间/项目搜索
 │   ├── resolve.py     history 编号 / 分析序号解析
 │   ├── guide.py       命令地图与 bash/zsh 补全脚本
 │   └── util.py        时间/路径/距离/颜色等工具
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             144 个单元 + 端到端 CLI 测试
+├── tests/             158 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

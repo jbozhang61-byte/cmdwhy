@@ -223,6 +223,8 @@ def _score_rule(rule, features, current_seq, scale, project_kind):
             if error.signature in rule.categories or error.category in rule.categories:
                 local += 5
         if local:
+            if event.seq == current_seq:
+                local *= 2
             distance = abs(event.seq - current_seq)
             weight = 1.0 / (1.0 + distance / float(max(1, scale)))
             score += local * weight
