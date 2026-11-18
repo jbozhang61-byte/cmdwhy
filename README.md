@@ -654,7 +654,7 @@ WSL2 上 **195 个测试全部通过**；VMware 上一次记录是 **167 个**�
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 
-仍未覆盖：VMware 上的 0.4.0 回归、Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04 回归。GitHub Actions 已实际跑过（Ubuntu 22.04/24.04 × Python 3.8–3.12 + shellcheck，全部通过）。
+仍未覆盖：VMware 上的 0.4.0 回归、Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04 回归。GitHub Actions 已实际跑过（Ubuntu 22.04/24.04 × Python 3.8–3.12、Debian 12、Arch、Fedora、AlmaLinux 9、Alpine + shellcheck，全部通过）。
 
 
 ## 开发与测试
@@ -676,6 +676,7 @@ cmdwhy/
 │   ├── analyze.py     分析引擎：会话、失败推断、修复链、动机、统计
 │   ├── sources.py     bash/zsh/fish/JSONL 解析、去重、脱敏
 │   ├── env.py         工作环境指纹（项目/Git/venv/发行版/容器/SSH/WSL/包管理器）
+│   ├── system.py      Debian/Arch/Fedora/SUSE/Alpine 包管理器适配
 │   ├── errors.py      错误分类与稳定签名
 │   ├── intent.py      命令意图、角色（只读/改动/运行）、修复意图
 │   ├── typo.py        纠错引擎（Damerau-Levenshtein + 真实命令 + 历史成功证据）
