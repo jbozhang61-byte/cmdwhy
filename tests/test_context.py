@@ -76,6 +76,16 @@ class ContextDemoTest(unittest.TestCase):
         self.assertEqual(context.end_seq, 62)
         self.assertGreater(context.end_seq - context.start_seq + 1, 1)
 
+    def test_environment_and_role_fields(self):
+        context = self.analysis.contexts[3]
+        self.assertIn("venv", context.environment)
+        self.assertIn("apt", context.environment)
+        self.assertEqual(context.role, "run")
+        self.assertIn(context.purpose_kind, ("排查", "执行"))
+        data = context.to_dict()
+        self.assertIn("environment", data)
+        self.assertIn("purpose_kind", data)
+
     def test_small_custom_window(self):
         context = infer_context(self.analysis, 18, window=2)
         self.assertLessEqual(context.start_seq, 18)

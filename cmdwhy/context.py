@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from .intent import command_role
 from .model import command_tokens
-from .util import truncate
+from .util import short_path, truncate
 
 
 @dataclass
@@ -23,6 +23,9 @@ class TaskContext:
     summary: str = ""
     start_seq: int = 0
     end_seq: int = 0
+    environment: str = ""
+    role: str = ""
+    purpose_kind: str = ""
 
     def to_dict(self):
         return {
@@ -35,6 +38,9 @@ class TaskContext:
             "summary": self.summary,
             "start_seq": self.start_seq,
             "end_seq": self.end_seq,
+            "environment": self.environment,
+            "role": self.role,
+            "purpose_kind": self.purpose_kind,
         }
 
 
@@ -48,6 +54,7 @@ class Rule:
     tokens: tuple = ()
     categories: tuple = ()
     kinds: tuple = ()
+    roles: tuple = ()
 
 
 RULES = (
@@ -60,6 +67,7 @@ RULES = (
         tokens=("venv", "requirements", "flask", "django", "pytest", "pip ", "module"),
         categories=("MODULE", "PIP668", "CMD_NOT_FOUND:pytest", "BUILD"),
         kinds=("python", "django"),
+        roles=("mutate", "run"),
     ),
     Rule(
         name="node",
@@ -70,6 +78,7 @@ RULES = (
         tokens=("package.json", "node_modules", "vite", "webpack", "dev server", "3000"),
         categories=("PORT", "CMD_NOT_FOUND:npm", "CMD_NOT_FOUND:node"),
         kinds=("node", "typescript"),
+        roles=("run", "mutate"),
     ),
     Rule(
         name="git",
@@ -79,15 +88,17 @@ RULES = (
         pairs=(("git", "push"), ("git", "pull"), ("git", "rebase"), ("git", "commit"), ("git", "merge")),
         tokens=("origin", "remote", "rebase", "non-fast-forward", "rejected"),
         categories=("GIT_REJECT", "GIT_CONFLICT"),
+        roles=("inspect", "mutate"),
     ),
     Rule(
         name="apt",
-        label="Ubuntu 软件包管理",
-        goal="在 Ubuntu 上安装/升级需要的软件包",
+        label="系统软件包管理",
+        goal="在 {distro} 上安装/升级/清理需要的软件包",
         heads=("apt", "apt-get", "dpkg", "snap", "add-apt-repository"),
         pairs=(("apt", "install"), ("apt", "upgrade"), ("apt-get", "install"), ("dpkg", "-i")),
         tokens=("install", "upgrade", "jq", "lock-frontend", "dpkg"),
         categories=("PERM:dpkg-lock", "LOCK:dpkg"),
+        roles=("mutate", "inspect"),
     ),
     Rule(
         name="docker",
@@ -96,6 +107,7 @@ RULES = (
         heads=("docker", "docker-compose", "podman", "ctr", "nerdctl"),
         tokens=("docker.sock", "container", "image", "compose"),
         categories=("DOCKER", "PERM:docker"),
+        roles=("inspect", "mutate"),
     ),
     Rule(
         name="service",
@@ -105,6 +117,7 @@ RULES = (
         pairs=(("systemctl", "restart"), ("systemctl", "reload"), ("systemctl", "status")),
         tokens=("nginx.conf", "reload", "restart", "service", "journalctl"),
         categories=("PERM",),
+        roles=("inspect", "mutate"),
     ),
     Rule(
         name="network",
@@ -113,6 +126,7 @@ RULES = (
         heads=("curl", "wget", "ping", "ss", "netstat", "lsof", "dig", "nslookup", "nc", "traceroute"),
         tokens=("localhost", "127.0.0.1", "port", "http", "dns"),
         categories=("NET",),
+        roles=("inspect", "run"),
     ),
     Rule(
         name="disk",
@@ -121,6 +135,7 @@ RULES = (
         heads=("df", "du", "journalctl", "ncdu"),
         tokens=("vacuum", "disk", "space", "/var/log", "autoremove", "clean"),
         categories=("DISK",),
+        roles=("inspect", "mutate"),
     ),
     Rule(
         name="build",
@@ -130,6 +145,7 @@ RULES = (
         tokens=("build", "test", "compile", "make"),
         categories=("BUILD",),
         kinds=("cmake", "make", "rust", "go", "java"),
+        roles=("run", "inspect"),
     ),
     Rule(
         name="script",
@@ -138,6 +154,7 @@ RULES = (
         heads=("chmod", "chown", "chattr"),
         tokens=("+x", "permission", "deploy.sh", "chmod"),
         categories=("PERM:exec",),
+        roles=("mutate", "run"),
     ),
     Rule(
         name="config",
@@ -145,6 +162,7 @@ RULES = (
         goal="修改配置并让改动生效",
         heads=("vim", "vi", "nano", "emacs", "code", "sed", "tee"),
         tokens=("conf", "config", "nginx", "yaml", "toml", "env"),
+        roles=("mutate",),
     ),
     Rule(
         name="deploy",
@@ -152,6 +170,7 @@ RULES = (
         goal="把 {project} 部署到目标环境",
         heads=("bash", "sh", "ansible", "terraform", "helm", "kubectl"),
         tokens=("deploy", "release", "rollout", "helm", "kubectl"),
+        roles=("run", "mutate"),
     ),
     Rule(
         name="explore",
@@ -159,6 +178,7 @@ RULES = (
         goal="了解当前目录、项目和仓库状态",
         heads=("ls", "ll", "la", "pwd", "cd", "tree", "find", "fd", "cat", "which", "type", "uname"),
         tokens=("ls", "status", "tree"),
+        roles=("inspect",),
     ),
 )
 
@@ -205,20 +225,22 @@ def _window_features(analysis, window_events):
         head = tokens[0] if tokens else ""
         sub = tokens[1] if len(tokens) > 1 and not tokens[1].startswith("-") else ""
         ann = analysis.ann(event.seq)
-        features.append((event, head, sub, event.cmd.lower(), ann.error))
+        features.append((event, head, sub, event.cmd.lower(), ann.error, ann.role))
     return features
 
 
 def _score_rule(rule, features, current_seq, scale, project_kind):
     score = 0.0
     hits = []
-    for event, head, sub, text, error in features:
+    for event, head, sub, text, error, role in features:
         local = 0
         if head in rule.heads:
             local += 2
         if (head, sub) in rule.pairs:
             local += 3
         local += min(3, sum(1 for token in rule.tokens if token in text))
+        if role and role in rule.roles:
+            local += 0.6
         if error is not None:
             if error.signature in rule.categories or error.category in rule.categories:
                 local += 5
@@ -248,6 +270,116 @@ def _dominant_project(analysis, window_events, current_env):
     return max(counts.items(), key=lambda item: item[1])[0]
 
 
+
+def _env_text(env):
+    if env is None:
+        return "环境未知"
+    parts = []
+    if env.cwd:
+        home = None
+        if env.user and env.cwd.startswith("/home/" + env.user):
+            home = "/home/" + env.user
+        elif env.cwd.startswith("/root"):
+            home = "/root"
+        parts.append(short_path(env.cwd, home=home, width=28))
+    if env.project:
+        kind = "(%s)" % env.project_kind if env.project_kind else ""
+        parts.append(env.project + kind)
+    if env.branch:
+        parts.append("git:" + env.branch + ("*" if env.dirty else ""))
+    if env.venv:
+        parts.append("venv:" + env.venv)
+    if env.distro:
+        parts.append(env.distro)
+    if env.cwd and env.wsl:
+        parts.append("WSL")
+    elif env.cwd and env.container:
+        parts.append("container")
+    if env.cwd and env.ssh:
+        parts.append("ssh")
+    if env.is_root:
+        parts.append("root")
+    if env.pkg_manager and (env.cwd or env.distro):
+        parts.append(env.pkg_manager)
+    return " · ".join(parts) if parts else "环境未知"
+
+
+def _environment_bonus(rule, env):
+    if env is None:
+        return 0.0
+    name = rule.name
+    kind = env.project_kind or ""
+    bonus = 0.0
+    if name == "python":
+        if env.venv or kind in ("python", "django"):
+            bonus += 1.4
+        if env.python:
+            bonus += 0.3
+    elif name == "node":
+        if kind in ("node", "typescript"):
+            bonus += 1.4
+    elif name == "git":
+        if env.branch or env.dirty:
+            bonus += 1.0
+    elif name == "apt":
+        if env.pkg_manager in ("apt", "pacman", "dnf", "yum", "zypper", "apk"):
+            bonus += 0.7
+        if env.is_root:
+            bonus += 0.4
+    elif name == "docker":
+        if kind == "docker" or env.container:
+            bonus += 1.5
+    elif name == "service":
+        if env.is_root or env.container:
+            bonus += 0.8
+    elif name == "network":
+        if env.ssh:
+            bonus += 0.5
+    elif name == "disk":
+        if env.is_root:
+            bonus += 0.4
+    elif name == "build":
+        if kind in ("cmake", "make", "rust", "go", "java", "dotnet"):
+            bonus += 1.2
+    elif name == "script":
+        if env.is_root or env.venv:
+            bonus += 0.4
+    elif name == "deploy":
+        if env.ssh or env.container:
+            bonus += 0.7
+    elif name == "explore":
+        if env.project:
+            bonus += 0.3
+    return bonus
+
+
+def _environment_changes(analysis, window_events):
+    changes = []
+    previous = None
+    for event in window_events:
+        env = analysis.envs.get(event.seq)
+        if env is None:
+            continue
+        if previous is not None:
+            if env.project and previous.project and env.project != previous.project:
+                changes.append("项目 %s → %s" % (previous.project, env.project))
+            if env.branch and previous.branch and env.branch != previous.branch:
+                changes.append("分支 %s → %s" % (previous.branch, env.branch))
+            if env.cwd and previous.cwd and env.cwd != previous.cwd:
+                changes.append("cd " + short_path(env.cwd, width=24))
+            if env.venv != previous.venv:
+                if env.venv:
+                    changes.append("进入 venv " + env.venv)
+                elif previous.venv:
+                    changes.append("离开 venv " + previous.venv)
+        previous = env
+    unique = []
+    for change in changes:
+        if change not in unique:
+            unique.append(change)
+    return unique[-3:]
+
+
 def _service_name(window_events):
     names = ("nginx", "docker", "mysql", "postgresql", "redis", "ssh", "cron", "apache2", "ufw")
     for event in window_events:
@@ -274,6 +406,24 @@ def _phase(analysis, ann, window_events):
         return "准备"
     if ann.intent.startswith(("删除", "清理", "结束", "卸载")):
         return "清理"
+    if ann.intent.startswith(("提交", "推送", "拉取", "同步")):
+        return "同步"
+    return "推进"
+
+
+def _purpose_kind(ann):
+    if ann.fix_of:
+        return "修复"
+    if ann.status in ("fail", "suspected"):
+        return "排查"
+    if ann.verified and ann.verified_at and ann.verified_at < ann.seq:
+        return "验证"
+    if ann.role == "inspect":
+        return "排查"
+    if ann.role == "mutate":
+        return "准备"
+    if ann.role == "run":
+        return "执行"
     if ann.intent.startswith(("提交", "推送", "拉取", "同步")):
         return "同步"
     return "推进"
@@ -311,15 +461,21 @@ def _nearest_failure(analysis, seq, window_events, before=True):
 def _setup_thing(event):
     tokens = command_tokens(event.cmd)
     head = tokens[0] if tokens else ""
-    if head in ("apt", "apt-get", "snap", "dpkg"):
+    if head in ("apt", "apt-get", "snap", "dpkg", "pacman", "dnf", "yum", "zypper", "apk"):
         packages = [token for token in tokens[2:] if not token.startswith("-")]
         return "软件包 " + " ".join(packages[:2]) if packages else "系统软件包"
     if head in ("pip", "pip3", "pipx", "uv", "poetry"):
         return "Python 依赖"
     if head in ("python", "python3") and "-m" in tokens and "venv" in tokens:
         return "虚拟环境"
-    if head == "npm":
+    if head in ("npm", "yarn", "pnpm"):
         return "Node 依赖"
+    if head in ("go", "cargo", "composer", "bundle", "dotnet"):
+        return "项目依赖"
+    if head in ("chmod", "chown"):
+        return "文件权限"
+    if head == "mkdir":
+        return "缺失目录"
     return "前置条件"
 
 
@@ -327,20 +483,23 @@ def _purpose(analysis, ann, ctx, window_events, window):
     event = analysis.event(ann.seq)
     tokens = command_tokens(event.cmd)
     head = tokens[0] if tokens else ""
+    env = analysis.envs.get(ann.seq)
+    env_text = _env_text(env)
     if ann.fix_of:
         source = analysis.ann(max(ann.fix_of))
         signature = source.error.signature if source.error else "上一条失败"
-        return "修复 #%d 的 %s：%s" % (source.seq, signature, ann.intent)
+        return "在 %s 环境里修复 #%d 的 %s：%s" % (env_text, source.seq, signature, ann.intent)
     if ann.status in ("fail", "suspected"):
         signature = ann.error.signature if ann.error is not None else "未知错误"
-        return "尝试%s；因 %s 失败，成为当前任务的卡点" % (ann.intent, signature)
+        return "在 %s 里尝试%s；因 %s 失败，成为当前任务的卡点" % (env_text, ann.intent, signature)
     for earlier in window_events:
         earlier_ann = analysis.ann(earlier.seq)
         if earlier_ann.verified and earlier_ann.verified_at == ann.seq:
             return "重跑 #%d 的命令，验证修复是否真的生效" % earlier.seq
     previous_failure = _nearest_failure(analysis, ann.seq, window_events, before=True)
     if ann.role == "inspect" and previous_failure is not None:
-        return "收集%s信息，定位 #%d 的 %s，为下一步修复提供依据" % (
+        return "在 %s 里收集%s信息，定位 #%d 的 %s，为下一步修复提供依据" % (
+            env_text,
             _focus(event),
             previous_failure.seq,
             previous_failure.error.signature if previous_failure.error else "错误",
@@ -362,19 +521,22 @@ def _purpose(analysis, ann, ctx, window_events, window):
                 later = other
                 break
         if later is not None:
-            return "为后面的 %s 准备%s，推进“%s”" % (
+            return "在 %s 里为后面的 %s 准备%s，推进“%s”" % (
+                env_text,
                 truncate(later.cmd, 30),
                 _setup_thing(event),
                 ctx.label,
             )
     if ann.verified and ann.verified_at and ann.verified_at < ann.seq:
-        return "重跑并确认前面的修复生效，验证“%s”是否真的完成" % ctx.label
+        return "在 %s 里重跑并确认前面的修复生效，验证“%s”是否真的完成" % (env_text, ctx.label)
     if ann.intent.startswith(("提交", "推送", "拉取", "同步")):
-        return "%s，把当前阶段的改动同步到远端" % ann.intent
-    return "%s，服务于“%s”" % (ann.intent, ctx.label)
+        return "在 %s 里%s，把当前阶段的改动同步到远端" % (env_text, ann.intent)
+    if ann.role == "run":
+        return "在 %s 里%s，推进“%s”" % (env_text, ann.intent, ctx.label)
+    return "在 %s 里%s，服务于“%s”" % (env_text, ann.intent, ctx.label)
 
 
-def _summary(analysis, seq, window_events, start_seq, end_seq, window):
+def _summary(analysis, seq, window_events, start_seq, end_seq, window, env=None):
     parts = []
     current = analysis.ann(seq)
     if current.error is not None and current.status in ("fail", "suspected"):
@@ -400,6 +562,11 @@ def _summary(analysis, seq, window_events, start_seq, end_seq, window):
                 heads.append(tokens[0])
         if heads:
             parts.append("相关命令：" + "、".join(heads[:4]))
+    if env is not None:
+        parts.append("环境：" + _env_text(env))
+        changes = _environment_changes(analysis, window_events)
+        if changes:
+            parts.append("环境变化：" + "；".join(changes))
     if not parts:
         parts.append("没有明显的关键命令")
     return "；".join(parts) + "（窗口 #%d–#%d，共 %d 条）" % (start_seq, end_seq, len(window_events))
@@ -417,6 +584,7 @@ def infer_context(analysis, seq, window=20):
     best_hits = []
     for rule in RULES:
         score, hits = _score_rule(rule, features, seq, window, project_kind)
+        score += _environment_bonus(rule, current_env)
         if score > best_score:
             best, best_score, best_hits = rule, score, hits
     if best is None or best_score < 1.5:
@@ -427,7 +595,8 @@ def infer_context(analysis, seq, window=20):
         )
         best_score = 0.0
     project = _dominant_project(analysis, window_events, current_env)
-    goal = best.goal.format(project=project, service=_service_name(window_events))
+    distro = current_env.distro if current_env is not None and current_env.distro else "当前系统"
+    goal = best.goal.format(project=project, service=_service_name(window_events), distro=distro)
     if best_score >= 8:
         confidence = "high"
     elif best_score >= 4:
@@ -442,11 +611,14 @@ def infer_context(analysis, seq, window=20):
         score=best_score,
         start_seq=start_seq,
         end_seq=end_seq,
+        environment=_env_text(current_env),
     )
     ann = analysis.ann(seq)
     ctx.phase = _phase(analysis, ann, window_events)
+    ctx.role = ann.role
+    ctx.purpose_kind = _purpose_kind(ann)
     ctx.purpose = _purpose(analysis, ann, ctx, window_events, window)
-    ctx.summary = _summary(analysis, seq, window_events, start_seq, end_seq, window)
+    ctx.summary = _summary(analysis, seq, window_events, start_seq, end_seq, window, current_env)
     return ctx
 
 

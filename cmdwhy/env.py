@@ -132,6 +132,21 @@ def detect_pkg_manager():
     return None
 
 
+def pkg_manager_for_distro(distro):
+    text = (distro or "").lower()
+    if any(name in text for name in ("ubuntu", "debian", "kali", "mint", "pop", "raspbian")):
+        return "apt"
+    if any(name in text for name in ("arch", "manjaro", "endeavour")):
+        return "pacman"
+    if any(name in text for name in ("fedora", "centos", "rhel", "rocky", "alma", "red hat")):
+        return "dnf"
+    if any(name in text for name in ("opensuse", "suse")):
+        return "zypper"
+    if "alpine" in text:
+        return "apk"
+    return None
+
+
 def _git(cwd, args):
     try:
         proc = subprocess.run(
@@ -272,9 +287,10 @@ def build_env(cwd, user=None, host=None, overrides=None) -> EnvInfo:
     env.container = is_container()
     env.ssh = is_ssh()
     env.wsl = is_wsl()
-    env.pkg_manager = detect_pkg_manager()
     env.shell = os.path.basename(os.environ.get("SHELL") or os.environ.get("ComSpec") or "") or None
-    env.distro = detect_distro()
+    override_distro = (overrides or {}).get("distro")
+    env.distro = override_distro or detect_distro()
+    env.pkg_manager = pkg_manager_for_distro(env.distro) if override_distro else detect_pkg_manager()
     project = detect_project(env.cwd)
     if project:
         env.project_root, env.project_kind, _marks = project
@@ -333,10 +349,14 @@ class EnvCache:
             env.is_root = _is_root()
             env.container = is_container()
             env.ssh = is_ssh()
+            env.wsl = is_wsl()
+            env.pkg_manager = detect_pkg_manager()
             env.shell = os.path.basename(os.environ.get("SHELL") or os.environ.get("ComSpec") or "") or None
             for field, value in overrides.items():
-                if value and hasattr(env, field):
+                if value is not None and hasattr(env, field):
                     setattr(env, field, value)
+            if overrides.get("distro"):
+                env.pkg_manager = pkg_manager_for_distro(env.distro)
             return env
         key = cwd
         if key not in self._cache:
@@ -349,8 +369,10 @@ class EnvCache:
             if host != _safe_host() and not (overrides or {}).get("distro"):
                 env.distro = None
         for field, value in (overrides or {}).items():
-            if value and hasattr(env, field):
+            if value is not None and hasattr(env, field):
                 setattr(env, field, value)
+        if overrides.get("distro"):
+            env.pkg_manager = pkg_manager_for_distro(env.distro)
         return env
 
 

@@ -9,7 +9,7 @@ import sys
 import time
 
 from .config import Config
-from .env import detect_distro
+from .env import detect_distro, is_container, is_ssh, is_wsl
 from .model import Event
 from .sources import append_event
 from .util import atomic_write
@@ -266,6 +266,10 @@ def make_event(cfg, args) -> Event:
         host=getattr(args, "host", None),
         shell=getattr(args, "shell", None),
         distro=getattr(args, "distro", None),
+        container=is_container(),
+        ssh=is_ssh(),
+        wsl=is_wsl(),
+        is_root=(hasattr(os, "geteuid") and os.geteuid() == 0),
         stderr=stderr,
         source="hook",
     )

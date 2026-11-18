@@ -24,6 +24,7 @@ from .util import (
 )
 
 MARK = chr(96)
+ROLE_LABELS = {"inspect": "只读排查", "mutate": "改变环境", "run": "运行/验证", "other": "其他"}
 
 
 def inline_code(text):
@@ -71,12 +72,14 @@ class Renderer:
             parts.append("venv:" + env.venv)
         if env.distro:
             parts.append(env.distro)
-        if env.wsl:
+        if env.cwd and env.wsl:
             parts.append("WSL")
-        elif env.container:
+        elif env.cwd and env.container:
             parts.append("container")
-        if env.ssh:
+        if env.cwd and env.ssh:
             parts.append("ssh")
+        if env.cwd and env.pkg_manager:
+            parts.append(env.pkg_manager)
         return parts
 
     def _env_line(self, env):
@@ -179,6 +182,10 @@ class Renderer:
             detail.append(ann.intent)
         elif ann.intent:
             detail.append("意图：" + ann.intent)
+        if ann.purpose:
+            detail.append("目的：" + truncate(ann.purpose, 110))
+        if ann.role:
+            detail.append("角色：" + ROLE_LABELS.get(ann.role, ann.role))
         if ann.novelty:
             detail.append(p("新增", "magenta"))
         if ann.danger == "danger":
@@ -551,6 +558,12 @@ class Renderer:
             basis = "退出码/错误原文" if ann.status_conf == "high" else ("仅退出码" if ann.status_conf == "medium" else "上下文推断")
             lines.append("置信度  " + conf + "（依据：" + basis + "）")
             lines.append("意图    " + (ann.intent or "未知"))
+            context = analysis.contexts.get(seq) if getattr(analysis, "contexts", None) else None
+            if ann.role:
+                role = ROLE_LABELS.get(ann.role, ann.role)
+                if context is not None and context.purpose_kind:
+                    role += " · " + context.purpose_kind
+                lines.append("作用    " + role)
             if ann.motivation:
                 lines.append("动机    " + ann.motivation)
             context = analysis.contexts.get(seq) if getattr(analysis, "contexts", None) else None

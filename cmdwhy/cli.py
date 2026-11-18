@@ -526,7 +526,7 @@ def cmd_ingest(args, cfg, renderer):
 
 
 def cmd_timeline(args, cfg, renderer):
-    analysis, meta = _analysis(cfg, with_context=args.verbose)
+    analysis, meta = _analysis(cfg, with_context=True)
     if args.json:
         _print_json(analysis_to_dict(analysis))
         return 0

@@ -1,13 +1,16 @@
-#18  2026-11-17 11:40:00
+#18  e28bcbf46ff  2026-11-17 11:40:00
 ──────────────────────────────────────────────────────────────────────────
 命令    apt install jq
+稳定 ID  e28bcbf46ff（推荐；新增历史后也不会变）
 结果    ✗ 失败（1）
 置信度  高（依据：退出码/错误原文）
 意图    安装系统包
+作用    改变环境 · 排查
 动机    执行失败，随后用修复动作救场
-任务    Ubuntu 软件包管理 · 排查（任务判断 高）
-目标    在 Ubuntu 上安装/升级需要的软件包
-目的    尝试安装系统包；因 PERM:dpkg-lock 失败，成为当前任务的卡点
+任务    系统软件包管理 · 排查（任务判断 高）
+目标    在 Ubuntu 24.04 上安装/升级/清理需要的软件包
+目的    在 ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04 · apt 里尝试安装系统包；因 PERM:dpkg-lock 失败，成为当前任务的卡点
+修复概率  高（98%）
 错误    PERM:dpkg-lock  E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
 退出码  1
 环境    ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
@@ -20,21 +23,24 @@
   · 修复动作：sudo apt install jq -y
   · 在 #19 重跑并成功
   · 更正建议：sudo apt install jq（apt 是系统级操作，需要 root 权限（PERM:dpkg-lock））
-上下文  #18 报 PERM:dpkg-lock；#19 验证成功（窗口 #18–#30，共 13 条）
+上下文  #18 报 PERM:dpkg-lock；#19 验证成功；环境：~/work/api · api · git:main · venv:.venv · Ubuntu 24.04 · apt；环境变化：cd …/ubuntu/work/api/web；离开 venv .venv（窗口 #18–#30，共 13 条）
 建议    包管理命令前加 sudo；若提示 lock 被占用，先 ps aux | grep -E 'apt|dpkg' 确认没有其他安装在进行。
 更正    sudo apt install jq  （apt 是系统级操作，需要 root 权限（PERM:dpkg-lock））
-后续    #19 sudo apt install jq -y  ✓ 成功（0）
+后续    #19[ed1564c1195] sudo apt install jq -y  ✓ 成功（0）
 
-#23  2026-11-17 11:52:00
+#23  ec277861ccc  2026-11-17 11:52:00
 ──────────────────────────────────────────────────────────────────────────
 命令    npm run dev
+稳定 ID  ec277861ccc（推荐；新增历史后也不会变）
 结果    ✗ 失败（1）
 置信度  高（依据：退出码/错误原文）
 意图    运行 npm 脚本
+作用    运行/验证 · 排查
 动机    执行失败，随后用修复动作救场
 任务    Node 开发服务 · 排查（任务判断 高）
 目标    让 api 的开发服务在本地跑起来
-目的    尝试运行 npm 脚本；因 PORT:3000 失败，成为当前任务的卡点
+目的    在 ~/work/api/web · api · git:main · Ubuntu 24.04 · apt 里尝试运行 npm 脚本；因 PORT:3000 失败，成为当前任务的卡点
+修复概率  高（97%）
 错误    PORT:3000  Error: listen EADDRINUSE: address already in use :::3000
 退出码  1
 环境    ~/work/api/web · api · git:main · Ubuntu 24.04
@@ -46,20 +52,23 @@
   · 退出码 1
   · 修复动作：kill 4242
   · 在 #27 重跑并成功
-上下文  #23 报 PORT:3000；#27 验证成功（窗口 #18–#30，共 13 条）
+上下文  #23 报 PORT:3000；#27 验证成功；环境：~/work/api/web · api · git:main · Ubuntu 24.04 · apt；环境变化：cd …/ubuntu/work/api/web；离开 venv .venv（窗口 #18–#30，共 13 条）
 建议    ss -ltnp | grep <端口> 或 lsof -i :<端口> 找到 PID，kill 它，或换端口。
-后续    #24 ss -ltnp | grep 3000  ✓ 成功（0）
+后续    #24[ea6d8242cfd] ss -ltnp | grep 3000  ✓ 成功（0）
 
-#45  2026-11-17 18:20:00
+#45  e31b4a2f611  2026-11-17 18:20:00
 ──────────────────────────────────────────────────────────────────────────
 命令    git push origin main
+稳定 ID  e31b4a2f611（推荐；新增历史后也不会变）
 结果    ? 疑似失败（无退出码，靠上下文推断）
 置信度  低（依据：上下文推断）
 意图    推送远端
+作用    改变环境 · 排查
 动机    执行失败，随后用修复动作救场
 任务    Git 同步与提交 · 排查（任务判断 高）
 目标    把本地改动安全地同步到远端
-目的    尝试推送远端；因 GIT_REJECT:fetch-first 失败，成为当前任务的卡点
+目的    在 ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04 · apt 里尝试推送远端；因 GIT_REJECT:fetch-first 失败，成为当前任务的卡点
+修复概率  中（72%）
 错误    GIT_REJECT:fetch-first  紧接着 git pull/fetch，通常是远端拒绝了 push（非快进）
 环境    ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
 位置    会话 S4 第 1 条 / 共 9 条
@@ -70,7 +79,7 @@
   · 修复动作：git pull --rebase
   · 在 #47 重跑（未记录退出码，无法确认）
   · 更正建议：git pull --rebase（远端有你本地没有的提交；先 rebase 再重跑原命令，避免覆盖远端历史）
-上下文  #45 报 GIT_REJECT:fetch-first；相关命令：git、python3（窗口 #45–#53，共 9 条）
+上下文  #45 报 GIT_REJECT:fetch-first；相关命令：git、python3；环境：~/work/api · api · git:main · venv:.venv · Ubuntu 24.04 · apt；环境变化：分支 main → fix/port-config（窗口 #45–#53，共 9 条）
 建议    git pull --rebase 后再 push；先 git log --oneline @{u}.. 看清差异。
 更正    git pull --rebase  （远端有你本地没有的提交；先 rebase 再重跑原命令，避免覆盖远端历史）
-后续    #46 git pull --rebase  · 未记录退出码
+后续    #46[eac546aa152] git pull --rebase  · 未记录退出码

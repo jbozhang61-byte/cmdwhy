@@ -590,11 +590,16 @@ def analyze(events, cfg=None, meta=None, with_context=True) -> Analysis:
     env_cache = EnvCache()
     envs = {}
     for event in events:
+        historical = bool(getattr(event, "distro", None))
         overrides = {
             "distro": getattr(event, "distro", None),
             "project": getattr(event, "project", None),
             "branch": getattr(event, "branch", None),
             "venv": getattr(event, "venv", None),
+            "container": getattr(event, "container", None) if getattr(event, "container", None) is not None else (False if historical else None),
+            "ssh": getattr(event, "ssh", None) if getattr(event, "ssh", None) is not None else (False if historical else None),
+            "wsl": getattr(event, "wsl", None) if getattr(event, "wsl", None) is not None else (False if historical else None),
+            "is_root": getattr(event, "is_root", None) if getattr(event, "is_root", None) is not None else (False if historical else None),
         }
         envs[event.seq] = env_cache.get(event.cwd, event.user, event.host, overrides)
     sessions = build_sessions(events, cfg.idle_gap, envs)

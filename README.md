@@ -45,26 +45,29 @@ python3 -m cmdwhy demo
 | 动机 | 前后命令关系 + 命令意图分类 + 修复链 | “修复 #18 的 PERM:dpkg-lock” |
 | 报错 | hook 捕获的 exit code / stderr；没有则从后续动作反推 | `PERM:dpkg-lock`、`PORT:3000`、`MODULE:flask` |
 | 后续 | 寻找同一条命令的重跑，检查是否成功 | “在 #19 重跑并成功 → 修复已验证” |
-| 任务上下文 | 前后各 20 条命令、错误签名、项目类型、修复链 | “正在修复 Python 依赖，当前处于修复阶段” |
+| 任务上下文 | 前后各 20 条命令、当时环境（项目/cwd/分支/venv/发行版/包管理器/容器/SSH/WSL/root）、每条命令的角色、错误签名、修复链 | “在 venv 里安装依赖，处于修复阶段” |
 | 建议 | 错误签名知识库 + Ubuntu 常见处置 + 输入纠错 | `sudo apt install jq` |
 
 ## 用前后几十条命令判断“当时在干什么”
 
-`cmdwhy explain` 默认会看这条命令**前后各 20 条**命令（限制在同一会话、同一项目内），用加权规则判断当前任务，并给出这条命令的目的：
+`cmdwhy explain` 默认会看这条命令**前后各 20 条**命令（限制在同一会话、同一项目内），同时读取**当时的环境**和**每条命令的角色**（只读排查 / 改变环境 / 运行验证），用加权规则判断当前任务，并给出这条命令的作用与目的：
 
 ```text
 任务    Node 开发服务 · 排查（任务判断 高）
 目标    让 api 的开发服务在本地跑起来
-目的    尝试运行 npm 脚本；因 PORT:3000 失败，成为当前任务的卡点
-上下文  #23 报 PORT:3000；#27 验证成功（窗口 #18–#30，共 13 条）
+作用    运行/验证 · 排查
+目的    在 ~/work/api/web · api · git:main · Ubuntu 24.04 · apt 里尝试运行 npm 脚本；因 PORT:3000 失败，成为当前任务的卡点
+环境    ~/work/api/web · api · git:main · Ubuntu 24.04
+上下文  #23 报 PORT:3000；#27 验证成功；环境变化：进入 ~/work/api/web；窗口 #18–#30，共 13 条
 ```
 
 判断依据按权重排序：
 
 1. 窗口内出现的**错误签名**（如 `PORT:3000`、`MODULE:flask`、`GIT_REJECT`）；
 2. 命令家族与关键 token（pip/venv、npm、git、apt、docker、systemctl、ss/lsof…）；
-3. 项目类型（python/node/rust…）与当前目录；
-4. 修复链：这条命令是准备、排查、修复还是验证。
+3. **当时的环境**：项目类型、cwd、分支、venv、发行版、包管理器、容器/SSH/WSL/root；
+4. **命令角色**：只读排查、改变环境、运行/验证，以及它是在准备/排查/修复/验证；
+5. 修复链：这条命令是准备、排查、修复还是验证。
 
 调整窗口：
 
@@ -196,7 +199,7 @@ cmdwhy summary --json
 ```text
 ── S2  11:40–12:07 · 27m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
    13 条命令 · 4 处报错 · 4 个修复动作（4 已验证）
-   任务  Ubuntu 软件包管理 · 脚本执行权限 · Node 开发服务 · Docker 与容器
+   任务  系统软件包管理 · 脚本执行权限 · Node 开发服务 · Docker 与容器
    错误  PERM:dpkg-lock ×1 · PERM:exec ×1 · PORT:3000 ×1 · DOCKER ×1
    修复  sudo apt install jq -y › chmod +x deploy.sh › kill 4242 › sudo docker ps
    改变  安装软件包 jq · 修改权限 +x deploy.sh · 结束进程 4242
@@ -419,7 +422,7 @@ cmdwhy history --grep status
 结果    ✗ 失败（1）
 置信度  高（依据：退出码/错误原文）
 意图    安装系统包
-任务    Ubuntu 软件包管理 · 排查（任务判断 高）
+任务    系统软件包管理 · 排查（任务判断 高）
 目标    在 Ubuntu 上安装/升级需要的软件包
 目的    尝试安装系统包；因 PERM:dpkg-lock 失败，成为当前任务的卡点
 错误    PERM:dpkg-lock  E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
@@ -667,7 +670,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-WSL2 上 **197 个测试全部通过**；VMware 0.4.0 上最近一次 **196 个测试通过**（14.9s；197 的短命令测试还没在 VM 重跑）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
+WSL2 上 **199 个测试全部通过**；VMware 0.4.0 上最近一次 **196 个测试通过**（14.9s；后续 3 个上下文测试还没在 VM 重跑）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 真实历史方面：当前机器能找到的真实用户历史是 **494 条**（Windows Git Bash 94 + PowerShell 401 + VM 12），没有可用的 1000+ 条用户历史，所以没有伪造。另用 1600 条**真实执行事件**（实际运行命令并记录退出码/cwd）做了规模压测：WSL 2 秒、VM 1 秒，27 个会话、53 次失败、4 条修复链，SQLite 索引 1600 条。
@@ -679,7 +682,7 @@ WSL2 上 **197 个测试全部通过**；VMware 0.4.0 上最近一次 **196 个�
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 197 个测试
+python3 -m unittest discover -s tests -v   # 199 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -720,7 +723,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             197 个单元 + 端到端 CLI 测试
+├── tests/             199 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

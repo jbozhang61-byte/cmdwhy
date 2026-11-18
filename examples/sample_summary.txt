@@ -9,7 +9,7 @@
 
 ── S2  11:40–12:07 · 27m00s · ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04
    13 条命令 · 4 处报错 · 4 个修复动作（4 已验证）
-   任务  Ubuntu 软件包管理 · 脚本执行权限 · Node 开发服务 · Docker 与容器
+   任务  系统软件包管理 · Node 开发服务 · Docker 与容器
    错误  PERM:dpkg-lock ×1 · PERM:exec ×1 · PORT:3000 ×1 · DOCKER ×1
    修复  sudo apt install jq -y › chmod +x deploy.sh › kill 4242 › sudo docker ps
    改变  安装软件包 jq · 修改权限 +x deploy.sh · 结束进程 4242
@@ -30,5 +30,5 @@
 
 ── S5  21:00–21:12 · 12m00s · ~ · Ubuntu 24.04
    9 条命令 · 0 处报错 · 0 个修复动作
-   任务  Ubuntu 软件包管理 · 系统服务运维
+   任务  系统软件包管理 · 系统服务运维
    改变  升级系统软件包 · 重启服务 nginx

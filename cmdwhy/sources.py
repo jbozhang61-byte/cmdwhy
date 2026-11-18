@@ -9,6 +9,7 @@ from collections import Counter
 from datetime import datetime
 
 from . import cache
+from .env import is_container, is_ssh, is_wsl
 from .model import Event
 from .redact import redact_command, redact_error
 from .util import append_line, new_uid, stable_uid
@@ -381,6 +382,14 @@ def append_event(cfg, event: Event):
     cfg.ensure()
     if not event.uid:
         event.uid = new_uid()
+    if event.container is None:
+        event.container = is_container()
+    if event.ssh is None:
+        event.ssh = is_ssh()
+    if event.wsl is None:
+        event.wsl = is_wsl()
+    if event.is_root is None:
+        event.is_root = hasattr(os, "geteuid") and os.geteuid() == 0
     if cfg.redact:
         event.cmd = redact_command(event.cmd)
         if event.stderr:

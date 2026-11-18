@@ -1,24 +1,24 @@
-命令搜索  关键词：git · 显示 10 / 共 15 条
+命令搜索  关键词：git · 显示 10 / 共 48 条
 
-  #53  h553    18:34:00  ·  git push
+  #53  ebf4f43c30e h553    18:34:00  ·  git push
        Git 同步与提交 · 推送远端 · api · ~/work/api
-  #52  h552    18:33:00  ·  git commit -m "fix: use env port"
+  #52  ef0ccb37496 h552    18:33:00  ·  git commit -m "fix: use env port"
        Git 同步与提交 · 提交改动 · api · ~/work/api
-  #51  h551    18:32:00  ·  git add -A
+  #51  ed305a2b06a h551    18:32:00  ·  git add -A
        Git 同步与提交 · 暂存改动 · api · ~/work/api
-  #50  h550    18:28:00  ·  python3 -m pytest -q
+  #50  eaa5b67708e h550    18:28:00  ·  python3 -m pytest -q
        Git 同步与提交 · 运行测试 · api · ~/work/api
-  #49  h549    18:25:00  ·  git checkout -b fix/port-config
+  #49  eaca41d588b h549    18:25:00  ·  git checkout -b fix/port-config
        Git 同步与提交 · 切换分支/文件 · api · ~/work/api
-  #48  h548    18:22:00  ·  git log --oneline -5
+  #48  eaa6c156b9c h548    18:22:00  ·  git log --oneline -5
        Git 同步与提交 · 查看提交历史 · api · ~/work/api
-  #47  h547    18:21:00  ·  git push origin main
+  #47  e9562035d20 h547    18:21:00  ·  git push origin main
        Git 同步与提交 · 推送远端 · api · ~/work/api
-  #46  h546    18:20:30  ·  git pull --rebase
+  #46  eac546aa152 h546    18:20:30  ·  git pull --rebase
        Git 同步与提交 · 同步远端后重试 · api · ~/work/api
-  #45  h545    18:20:00  ?  git push origin main  GIT_REJECT:fetch-first
+  #45  e31b4a2f611 h545    18:20:00  ?  git push origin main  GIT_REJECT:fetch-first
        Git 同步与提交 · 推送远端 · api · ~/work/api
-  #17  h517    09:42:00  ✓  git checkout -b feat/history-why
-       Python 依赖与环境 · 切换分支/文件 · api · ~/work/api
+  #44  e0a32ca9c1f h544    15:23:00  ·  uptime
+       系统服务运维 · 查看运行时长 · infra · ~/infra
 
-查看详情：cmdwhy explain <编号>（history 编号或 #分析序号）
+查看详情：cmdwhy explain <编号>；e开头的是稳定 ID，新增历史后不会变

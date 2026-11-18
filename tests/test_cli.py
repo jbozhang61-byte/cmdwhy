@@ -321,6 +321,12 @@ class CliTest(unittest.TestCase):
 
 
 
+    def test_timeline_shows_purpose(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        text = self.run_cli("timeline", "-n", "5", expect=0).stdout
+        self.assertIn("目的：", text)
+
     def test_timeline_pagination(self):
         path = self.write_events()
         self.run_cli("ingest", "--file", path, expect=0)

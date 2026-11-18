@@ -133,6 +133,10 @@ class Event:
     project: str = None
     branch: str = None
     venv: str = None
+    container: bool = None
+    ssh: bool = None
+    wsl: bool = None
+    is_root: bool = None
     source: str = "history"
     sid: str = ""
     session_tag: str = None
@@ -181,6 +185,10 @@ class Event:
             "project": self.project,
             "branch": self.branch,
             "venv": self.venv,
+            "container": self.container,
+            "ssh": self.ssh,
+            "wsl": self.wsl,
+            "is_root": self.is_root,
             "source": self.source,
             "sid": self.sid,
         }
@@ -207,10 +215,22 @@ class Event:
             project=data.get("project"),
             branch=data.get("branch"),
             venv=data.get("venv"),
+            container=_to_bool(data.get("container")),
+            ssh=_to_bool(data.get("ssh")),
+            wsl=_to_bool(data.get("wsl")),
+            is_root=_to_bool(data.get("is_root", data.get("root"))),
             source=str(data.get("source") or "hook"),
             sid=str(data.get("sid") or ""),
             session_tag=data.get("session_tag"),
         )
+
+
+def _to_bool(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() in ("1", "true", "yes", "on")
 
 
 def _to_int(value):
