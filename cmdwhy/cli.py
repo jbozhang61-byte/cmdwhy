@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta
@@ -949,8 +950,7 @@ def cmd_repair(args, cfg, renderer):
 def cmd_fix(args, cfg, renderer):
     analysis, meta = _analysis(cfg)
     if not args.words and not args.last:
-        print("用法：cmdwhy fix <命令> 或 cmdwhy fix --last", file=sys.stderr)
-        return 2
+        args.last = True
     cmd_text = " ".join(args.words)
     error = None
     if args.last:
@@ -1271,10 +1271,51 @@ def cmd_doctor(args, cfg, renderer):
     return 0
 
 
+SHORTCUT_ALIASES = {
+    "tl": "timeline",
+    "ex": "explain",
+    "why": "explain",
+    "s": "search",
+    "find": "search",
+    "sum": "summary",
+    "h": "history",
+    "hist": "history",
+    "next": "do",
+    "st": "stats",
+}
+
+SHORTCUT_COMMANDS = {
+    "today": ["summary", "--today"],
+    "week": ["summary", "--week"],
+}
+
+TARGET_RE = re.compile(
+    r"^(?:#?\d+(?:-\d+)?|h:?\d+(?:-\d+)?|seq:\d+(?:-\d+)?|"
+    r"e[0-9a-f]{6,}|uid:e?[0-9a-f]{6,}|last)$",
+    re.I,
+)
+
+
+def _expand_shorthand(rest):
+    """把 518 / e1a2 / last / tl / s 等短写展开成完整子命令。"""
+    if not rest:
+        return rest
+    first = rest[0]
+    lowered = first.lower()
+    if lowered in SHORTCUT_COMMANDS:
+        return SHORTCUT_COMMANDS[lowered] + list(rest[1:])
+    if lowered in SHORTCUT_ALIASES:
+        return [SHORTCUT_ALIASES[lowered]] + list(rest[1:])
+    if TARGET_RE.match(first):
+        return ["explain"] + list(rest)
+    return rest
+
+
 def main(argv=None):
     _configure_stdio()
     raw = list(sys.argv[1:] if argv is None else argv)
     home, rest, flags = _extract_globals(raw)
+    rest = _expand_shorthand(rest)
     parser = build_parser()
     args = parser.parse_args(rest)
     if not getattr(args, "command", None):

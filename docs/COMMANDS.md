@@ -10,6 +10,18 @@ cmdwhy --home /tmp/cw demo   # 临时换数据目录
 cmdwhy --no-color timeline   # 适合重定向到文件
 ```
 
+## 最短写法
+
+    cmdwhy 518              # 等同 cmdwhy explain 518
+    cmdwhy last             # 最近一条
+    cmdwhy e1a2b3c4         # 稳定 ID
+    cmdwhy tl -n 20         # timeline
+    cmdwhy s flask          # search
+    cmdwhy sum / today / week
+    cmdwhy fix              # 检查上一条失败
+    cmdwhy next             # do
+
+别名：tl/ex/why/s/find/sum/h/hist/next/st；today/week 直接映射到 summary。
 ## 全局参数
 
 | 参数 | 说明 |

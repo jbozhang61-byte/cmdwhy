@@ -375,6 +375,19 @@ class CliTest(unittest.TestCase):
         self.assertIn("已否定", listed)
         self.run_cli("repair", "accept", "#19", expect=0)
 
+
+    def test_shorthand_commands(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        explained = self.run_cli("#3", expect=0).stdout
+        self.assertIn("命令", explained)
+        searched = self.run_cli("s", "git", expect=0).stdout
+        self.assertIn("命令搜索", searched)
+        timeline = self.run_cli("tl", "-n", "2", expect=0).stdout
+        self.assertIn("命令时间线", timeline)
+        fixed = self.run_cli("fix", expect=0).stdout
+        self.assertIn("命令输入检查", fixed)
+
     def test_summary(self):
         path = self.write_events()
         self.run_cli("ingest", "--file", path, expect=0)

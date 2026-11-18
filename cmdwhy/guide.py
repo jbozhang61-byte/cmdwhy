@@ -44,6 +44,9 @@ GROUPS = [
             ("cmdwhy doctor", "自检：数据目录、历史来源、hook、Git、知识库"),
             ("cmdwhy guide", "打印这张命令地图"),
             ("cmdwhy version", "显示版本、Python、数据目录"),
+            ("cmdwhy 518", "最短：等同 explain 518"),
+            ("cmdwhy tl / s / sum", "timeline / search / summary 短别名"),
+            ("cmdwhy today / week", "今天的汇总 / 本周汇总"),
         ],
     ),
     (

@@ -252,6 +252,23 @@ cmdwhy --version
 - `cmdwhy`：分析、报告、诊断、纠错；
 - `cw`：包装执行器，运行时捕获真实错误，失败后给出或执行修正（见下文）。
 
+## 最省事的用法
+
+不用记完整子命令，直接用编号或短别名：
+
+| 想做什么 | 最短写法 |
+| --- | --- |
+| 看某条命令为什么执行 | `cmdwhy 518` / `cmdwhy '#18'` / `cmdwhy e1a2b3c4` |
+| 看最近一条 | `cmdwhy last` |
+| 看时间线 | `cmdwhy tl -n 20` |
+| 搜索 | `cmdwhy s flask` / `cmdwhy find PORT` |
+| 会话/今天/本周总结 | `cmdwhy sum` / `cmdwhy today` / `cmdwhy week` |
+| 检查上一条失败命令 | `cmdwhy fix` |
+| 推断下一步 | `cmdwhy next` / `cmdwhy do` |
+| 查看命令地图 | `cmdwhy guide` |
+
+短别名：`tl`=timeline，`ex`/`why`=explain，`s`/`find`=search，`sum`=summary，`h`/`hist`=history，`next`=do，`st`=stats；`today`/`week` 直接是 summary 的快捷方式。
+
 ## 快速开始
 
 ```bash
@@ -650,7 +667,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-WSL2 上 **196 个测试全部通过**；VMware 0.4.0 上 **196 个测试通过**（14.9s）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
+WSL2 上 **197 个测试全部通过**；VMware 0.4.0 上最近一次 **196 个测试通过**（14.9s；197 的短命令测试还没在 VM 重跑）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 真实历史方面：当前机器能找到的真实用户历史是 **494 条**（Windows Git Bash 94 + PowerShell 401 + VM 12），没有可用的 1000+ 条用户历史，所以没有伪造。另用 1600 条**真实执行事件**（实际运行命令并记录退出码/cwd）做了规模压测：WSL 2 秒、VM 1 秒，27 个会话、53 次失败、4 条修复链，SQLite 索引 1600 条。
@@ -662,7 +679,7 @@ WSL2 上 **196 个测试全部通过**；VMware 0.4.0 上 **196 个测试通过*
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 196 个测试
+python3 -m unittest discover -s tests -v   # 197 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -703,7 +720,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             196 个单元 + 端到端 CLI 测试
+├── tests/             197 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile
