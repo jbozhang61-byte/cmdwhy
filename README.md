@@ -638,11 +638,11 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-两边都是 **183 个测试全部通过**。VMware 里做了真实交互式 bash + hook 测试；WSL 里另外实测了 zsh 5.9、fish 3.7 的 hook：连续两次相同的 `git status` 分别记录，`git stauts` 退出码为 1；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
+WSL2 上 **183 个测试全部通过**；VMware 上一次记录是 **167 个**，0.3.0 验证时虚拟机已关机，没有强行启动。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 
-仍未覆盖：Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04/22.04 回归。
+仍未覆盖：VMware 上的 0.3.0 回归、Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04/22.04 回归。CI 矩阵已写入但还没在 GitHub 上实际跑过。
 
 
 ## 开发与测试

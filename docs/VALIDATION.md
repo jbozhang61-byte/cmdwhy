@@ -1,6 +1,6 @@
 # Ubuntu 验证记录
 
-日期：2026-11-17
+日期：2026-11-18
 
 本次在两种真实 Ubuntu 24.04 环境里跑过 cmdwhy，均为原生 Linux 用户态，不使用 Windows 兼容层。
 
@@ -12,12 +12,12 @@
 | bash | 5.2.21 | 5.2.21 |
 | git | 2.43.0 | 2.43.0 |
 | zsh / fish | zsh 5.9 / fish 3.7 | 未安装 |
-| 测试 | 167 passed | 167 passed |
-| 用时 | 32.2s | 10.2s |
+| 测试 | 183 passed | 167 passed（0.2.0） |
+| 用时 | 46.0s | 10.2s |
 
 ## 验证过的功能
 
-- python3 -m unittest discover -s tests：167 个测试全部通过；
+- python3 -m unittest discover -s tests：183 个测试全部通过；
 - cmdwhy demo：时间线、任务上下文、history 编号显示正常；
 - cmdwhy fix "git stauts"：干净环境下判定为高可信度，建议 git status；
 - cmdwhy ingest + cmdwhy history --duplicates --all：重复的 git status 分别编号；
@@ -35,9 +35,15 @@
     - 连续两次 git status 分别记录；
 - 自动执行边界：sudo/apt/systemctl 在计划里标为高风险，auto 和 --yes 都不会选中；
 - bash 5.2 的 PROMPT_COMMAND 数组形式保留原有内容并追加记录函数；
-- 跨来源重复：同一 history 编号的 hook 事件与 history 输出只保留信息更全的一条。
-- cmdwhy search --error PORT --since 7d：按错误和时间搜索；
-- cmdwhy summary --session S2：按会话总结任务、报错、修复和改变；
+- 跨来源重复：同一 history 编号的 hook 事件与 history 输出只保留信息更全的一条；
+- 解析缓存：5000 条历史首次 0.090s，第二次 0.036s（SQLite，mtime/size 失效）；
+- 错误识别扩展到 SSH/DB/TLS/K8S/TEST_FAIL/DEPENDENCY/YAML/JSON/GO/RUST/JAVA 等；
+- 环境识别新增 PHP、.NET、Terraform、Kubernetes、WSL、包管理器；
+- 本地通过 bash -n、shellcheck -S error、zsh -n、fish -n；coverage 基线约 55%。
+- cmdwhy search --error PORT --since 7d / --regex / --any / --sort relevance：错误、时间、正则、OR、相关度搜索；
+- cmdwhy summary --session S2 / --today / --week / --project api：会话与聚合概要；
+- cmdwhy timeline --page 1 --page-size 20：时间线分页；
+- cmdwhy repair graph / reject / accept：修复链因果图与人工纠正；
 - cmdwhy do --from 1 --dry-run：从指定命令推断下一步；
 - cmdwhy mode、cmdwhy doctor：状态与自检正常。
 
@@ -63,9 +69,11 @@ VMware 虚拟机里的 hook 交互式日志：
 
 ## 仍未覆盖
 
+- VMware 上的 0.3.0 回归（验证时虚拟机已关机，167 是 0.2.0 记录）；
 - Ubuntu 桌面图形终端里的真实交互（本次通过 script 伪终端验证 bash + hook）；
 - 上千条真实历史、多人共用机器；
-- Ubuntu 20.04 / 22.04 的兼容性回归。
+- Ubuntu 20.04 / 22.04 的兼容性回归；
+- GitHub Actions 矩阵尚未实际跑过（workflow 已写入并在本地验证 shellcheck/coverage）。
 
 ## 复现方式
 
