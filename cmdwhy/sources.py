@@ -59,6 +59,14 @@ def looks_like_history(text) -> bool:
     return hits >= max(2, int(len(lines) * 0.6))
 
 
+def _strip_powershell_call(line):
+    """PowerShell 历史里调用运算符写成 '& command'；去掉它，避免把所有命令记成 &。"""
+    stripped = (line or "").strip()
+    if stripped.startswith("& "):
+        return stripped[2:].strip()
+    return stripped
+
+
 def parse_history_output(text, source="history"):
     """解析 history / history 20 的输出：编号、可选时间戳、命令。
 
@@ -90,7 +98,7 @@ def parse_history_output(text, source="history"):
             rest = time_match.group(3).strip()
         if not rest:
             continue
-        events.append(Event(cmd=rest, ts=ts, hist_id=hist_id, source=source))
+        events.append(Event(cmd=_strip_powershell_call(rest), ts=ts, hist_id=hist_id, source=source))
     return events
 
 
@@ -105,7 +113,7 @@ def parse_bash(text, source="bash_history"):
         if match:
             ts = float(match.group(1))
             continue
-        events.append(Event(cmd=line.strip(), ts=ts, source=source))
+        events.append(Event(cmd=_strip_powershell_call(line), ts=ts, source=source))
     return events
 
 

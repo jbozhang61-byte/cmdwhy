@@ -12,12 +12,12 @@
 | bash | 5.2.21 | 5.2.21 |
 | git | 2.43.0 | 2.43.0 |
 | zsh / fish | zsh 5.9 / fish 3.7 | 未安装 |
-| 测试 | 195 passed | 167 passed（0.2.0） |
-| 用时 | 49.3s | 10.2s |
+| 测试 | 196 passed | 195 passed |
+| 用时 | 49.3s | 20.2s |
 
 ## 验证过的功能
 
-- python3 -m unittest discover -s tests：195 个测试全部通过；
+- python3 -m unittest discover -s tests：196 个测试全部通过（VM 上 195 个）；
 - cmdwhy demo：时间线、任务上下文、history 编号显示正常；
 - cmdwhy fix "git stauts"：干净环境下判定为高可信度，建议 git status；
 - cmdwhy ingest + cmdwhy history --duplicates --all：重复的 git status 分别编号；
@@ -67,6 +67,25 @@ VMware 虚拟机里的 hook 交互式日志：
 5. 自动执行边界：auto 只跑低风险；中风险需 `--yes`；sudo/apt/systemctl 等高风险永不自动执行。
 6. shell 覆盖：bash 兼容 PROMPT_COMMAND 数组；zsh 改用 preexec/precmd；新增 fish hook（fish_preexec/fish_prompt）。
 
+## 真实历史与规模压测
+
+当前环境里能找到的真实用户历史：
+
+| 来源 | 行数/事件 |
+| --- | --- |
+| Windows Git Bash .bash_history | 94 条（过滤掉 Function Key 噪声） |
+| PowerShell ConsoleHost_history | 401 行 / 真实命令 |
+| VMware Ubuntu .bash_history | 12 条 |
+| 合计 | 494 个事件 |
+
+没有可用的 1000+ 条用户历史，所以没有把合成命令伪装成真实历史。
+另外生成并实际执行了 1600 条真实命令事件（临时 git 仓库、真实退出码/cwd/stderr，不是用户历史）：
+
+- WSL 分析耗时 2 秒，VMware 1 秒；
+- 1600 事件 / 27 个会话 / 53 次失败 / 4 条修复链；
+- SQLite 索引 634–659 KB，search 走 FTS5/BM25；
+- PowerShell `& command` 前缀已归一化，避免把 280 条命令误记成 `&`。
+
 ## 跨发行版 CI
 
 GitHub Actions 的 distro 任务在容器里跑了完整测试：
@@ -83,9 +102,9 @@ GitHub Actions 的 distro 任务在容器里跑了完整测试：
 
 ## 仍未覆盖
 
-- VMware 上的 0.4.0 回归（验证时虚拟机已关机，167 是 0.2.0 记录）；
 - Ubuntu 桌面图形终端里的真实交互（本次通过 script 伪终端验证 bash + hook）；
-- 上千条真实历史、多人共用机器；
+- 用户本人的上千条真实历史：当前只找到 494 条真实历史，没有伪造；另用 1600 条真实执行事件做了规模压测；
+- 多人共用机器；
 - Ubuntu 20.04 兼容性回归；22.04/24.04、Debian 12、Arch、Fedora、AlmaLinux 9、Alpine 已由 GitHub Actions（run 44303764093）覆盖并通过。
 
 ## 复现方式

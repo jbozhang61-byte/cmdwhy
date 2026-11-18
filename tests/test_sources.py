@@ -23,6 +23,10 @@ class SourcesTest(unittest.TestCase):
         self.assertEqual(events[1].cmd, "git status")
         self.assertEqual(events[1].ts, 1763341930.0)
 
+    def test_powershell_call_prefix(self):
+        events = parse_bash("& ls\n& echo hi\n")
+        self.assertEqual([event.cmd for event in events], ["ls", "echo hi"])
+
     def test_zsh_extended_and_multiline(self):
         text = ": 1763341920:12;echo hi\n: 1763341930:0;for i in 1 2; do\n    echo $i\ndone\n"
         events = parse_zsh(text)
