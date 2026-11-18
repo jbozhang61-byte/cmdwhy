@@ -155,10 +155,13 @@ cmdwhy search --error PORT --since 7d
 cmdwhy search --status fail --project api
 cmdwhy search --session S2 --oldest
 cmdwhy search --since today --until "2026-11-17 18:00"
+cmdwhy search --regex 'PORT|EADDRINUSE'
+cmdwhy search --any npm pnpm yarn
+cmdwhy search git push --sort relevance
 cmdwhy search git --json
 ```
 
-搜索范围包括命令文本、意图、任务、目的、错误签名/原文、项目名和 cwd；多个关键词是 AND。结果保留 history 编号，可以直接：
+搜索范围包括命令文本、意图、任务、目的、错误签名/原文、项目名和 cwd。默认多个关键词是 AND；--any 改为 OR，--regex 把查询当正则，--sort relevance 按命中位置/字段权重排序。结果保留 history 编号与稳定 ID，可以直接：
 
 ```text
 命令搜索  关键词：flask · 显示 1 / 共 62 条
@@ -183,6 +186,10 @@ cmdwhy search git --json
 cmdwhy summary
 cmdwhy summary --session S2
 cmdwhy summary --all
+cmdwhy summary --today
+cmdwhy summary --week
+cmdwhy summary --project api
+cmdwhy summary --since 7d
 cmdwhy summary --json
 ```
 
@@ -196,6 +203,14 @@ cmdwhy summary --json
 ```
 
 每条会话会汇总：命令数、报错数、修复动作与验证数、主要任务、错误签名、修复步骤、环境改变。
+
+--today / --week（周一开始）/ --project / --since / --until 会切换到聚合视图：
+
+    今日概要  42 条命令 · 3 个会话 · 6 处报错 · 5 个修复（4 已验证）
+       任务  Node 开发服务 · Docker 与容器
+       错误  PORT:3000 ×2 · DOCKER ×1
+       修复  kill 4242 › sudo docker ps
+       改变  结束进程 4242
 
 ## 安装
 
@@ -232,6 +247,7 @@ cmdwhy --version
 cmdwhy init            # 建数据目录，默认 ~/.local/share/cmdwhy
 cmdwhy ingest          # 读取 ~/.bash_history / ~/.zsh_history / fish 历史，沉淀知识库
 cmdwhy timeline -n 30  # 按会话看逐条注解
+cmdwhy timeline --page 2 --page-size 20   # 分页看历史
 cmdwhy report          # 报错 / 改变 / 添加 / 随机 四段式复盘
 cmdwhy hook install    # 关键：让之后的命令带上退出码和错误原文
 exec bash -l           # 或新开终端，让 hook 生效
@@ -333,21 +349,22 @@ cmdwhy history --grep status
 | `cmdwhy init` | 初始化数据目录和配置 |
 | `cmdwhy ingest [--file 路径] [--stdin]` | 导入历史（也支持 history 管道输入），学习错误→修复的知识库 |
 | `cmdwhy analyze 文件... [--stdin]` | 只分析指定历史文件或标准输入，不改配置、不写知识库 |
-| `cmdwhy timeline [-n N] [--session S2]` | 按会话展示命令、环境、动机、报错、修复链 |
+| `cmdwhy timeline [-n N] [--session S2] [--page 2]` | 按会话展示；`--page/--page-size` 分页 |
 | `cmdwhy explain 518` / `'#18'` / `e1a2b3c4` | 按 history 编号、当前序号或稳定 ID 解释命令；可调前后窗口 |
 | `cmdwhy report [--md 文件]` | 生成“报错 / 改变 / 添加 / 随机”四段式复盘 |
 | `cmdwhy export --format md -o 文件` | 导出 json / md / timeline / report |
 | `cmdwhy stats` | 错误率、意图分布、修复耗时（MTTR）、sudo 比例 |
 | `cmdwhy sessions` | 列出会话及每个会话的环境 |
-| `cmdwhy summary [--session S2]` | 按会话总结任务、报错、修复和环境改变 |
+| `cmdwhy summary [--session S2] [--today] [--week] [--project api]` | 按会话/时间段/项目总结 |
 | `cmdwhy changes` | 环境/状态变化：cd、安装、分支、服务、权限…… |
 | `cmdwhy additions` | 第一次出现的新命令 |
 | `cmdwhy history [--duplicates] [--grep 文本]` | 像 history 一样列出编号，重复命令分别编号 |
-| `cmdwhy search 关键词` / `--error` / `--since` / `--project` | 按关键词、错误、时间、项目搜索历史 |
+| `cmdwhy search 关键词` / `--regex` / `--any` / `--sort relevance` | 搜索历史，支持正则、OR、相关度排序 |
 | `cmdwhy digest --random 2` | 随机回看几个会话 |
 | `cmdwhy fix "git stauts"` | 输入纠错，给出可直接执行的正确命令 |
 | `cmdwhy fix --last` | 检查上一条失败命令的输入 |
 | `cmdwhy diagnose` / `--text "错误输出"` | 检索同类错误，给出你以前的修法和通用建议 |
+| `cmdwhy repair graph / reject / accept` | 查看因果图，纠正“这条不是修复” |
 | `cmdwhy kb` / `--signature PERM:dpkg-lock` / `--export` | 查看、检索、导出错误知识库 |
 | `cmdwhy hook install [--shell fish]` | 管理 bash / zsh / fish hook |
 | `cmdwhy run [--shell] -- 命令` | 包装执行，捕获 stderr 并即时诊断；--shell 支持管道/重定向 |
@@ -481,6 +498,12 @@ bash / zsh / fish 历史          hook 记录（退出码、cwd、stderr、发�
 | `GIT_REJECT:fetch-first` | push 被拒（non-fast-forward） |
 | `LOCK:dpkg` | 包管理器锁被占用 |
 | `DISK:space` / `KILLED:oom` | 磁盘满 / OOM |
+| `GIT_AUTH:http` / `SSH:publickey` | 远程认证 / SSH 公钥失败 |
+| `DB:postgres` / `DB:mysql` | 数据库连接、权限或库表错误 |
+| `TEST_FAIL:pytest` / `DEPENDENCY:npm` | 测试失败 / 依赖冲突 |
+| `YAML` / `JSON_DECODE` / `TLS:certificate` | 配置解析 / 证书校验 |
+| `READONLY` / `K8S:pod` | 只读文件系统 / Pod 异常 |
+| `GO:module` / `RUST:compile` / `JAVA:version` | 多语言构建失败 |
 
 ### 修复链与验证
 
@@ -500,6 +523,17 @@ bash / zsh / fish 历史          hook 记录（退出码、cwd、stderr、发�
 | 低 | 纯上下文推断（旧历史没有退出码） |
 
 所有“推测失败”在时间线上都带 `?` 前缀，不混进已确认错误。
+
+## 纠正修复链（“这条不是修复”）
+
+修复链是启发式推断，可能把“并行做别的事”误认为修复。现在可以人工纠正：
+
+    cmdwhy repair graph              # 失败 → 修复动作 → 验证 的因果图
+    cmdwhy repair reject '#19'       # 第 19 条不是对上一条失败的修复
+    cmdwhy repair accept '#19'       # 确认这条修复链成立
+    cmdwhy repair list               # 列出已确认/否定的链
+
+纠正按失败事件的稳定 ID 持久化到 repairs.json；之后 explain、报告、知识库学习都会尊重它。
 
 ## 错误知识库：下次别再踩同一个坑
 
@@ -549,7 +583,8 @@ $ cmdwhy fix "gti status"
 
 - **全部本地**：不联网、不上传、不调用外部 API。
 - **落盘前脱敏**：命令里的 `--password=`、`--token=`、`export *SECRET=`、URL 里的账号密码、GitHub token、AWS key、SSH 公钥、40 位以上混合 token 会被替换成 `***`，hook 记录在写入 events.jsonl 之前就会处理。
-- **存储位置**：`$CMDWHY_HOME`，默认 `~/.local/share/cmdwhy`；文件是 `events.jsonl`（追加写）、`knowledge.json`、`config.json`。
+- **存储位置**：`$CMDWHY_HOME`，默认 `~/.local/share/cmdwhy`；文件是 `events.jsonl`（追加写）、`knowledge.json`、`config.json`、`repairs.json`、`cache.db`（SQLite 解析缓存）。
+- **解析缓存**：历史文件按 mtime/size + redact 配置缓存到 `cache.db`，缓存内容已脱敏；文件改动会自动失效，删掉 `cache.db` 也安全。
 - **危险命令不自动执行**：`cw run --yes` 只执行通过安全检查的修正命令；含 `<包名>` 这种占位符、或命中危险规则的建议一律拒绝。
 - **可卸载**：`cmdwhy hook uninstall` 移除 rc 里的配置；删掉数据目录即可清除全部记录。
 
@@ -603,7 +638,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-两边都是 **167 个测试全部通过**。VMware 里做了真实交互式 bash + hook 测试；WSL 里另外实测了 zsh 5.9、fish 3.7 的 hook：连续两次相同的 `git status` 分别记录，`git stauts` 退出码为 1；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
+两边都是 **183 个测试全部通过**。VMware 里做了真实交互式 bash + hook 测试；WSL 里另外实测了 zsh 5.9、fish 3.7 的 hook：连续两次相同的 `git status` 分别记录，`git stauts` 退出码为 1；`cw run` 自动纠错、`do --from`、`doctor` 也都正常。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 
@@ -613,10 +648,12 @@ $ cmdwhy fix "gti status"
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 167 个测试
+python3 -m unittest discover -s tests -v   # 183 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
+
+CI（.github/workflows/ci.yml）：Ubuntu 22.04/24.04 × Python 3.8–3.12 矩阵，跑 coverage + unittest；另有 shellcheck 任务检查 bash hook、zsh/fish 语法和 install.sh。
 
 目录：
 
@@ -626,12 +663,12 @@ cmdwhy/
 │   ├── cli.py         命令行入口、所有子命令
 │   ├── analyze.py     分析引擎：会话、失败推断、修复链、动机、统计
 │   ├── sources.py     bash/zsh/fish/JSONL 解析、去重、脱敏
-│   ├── env.py         工作环境指纹（项目/Git/venv/发行版/容器/SSH）
+│   ├── env.py         工作环境指纹（项目/Git/venv/发行版/容器/SSH/WSL/包管理器）
 │   ├── errors.py      错误分类与稳定签名
 │   ├── intent.py      命令意图、角色（只读/改动/运行）、修复意图
 │   ├── typo.py        纠错引擎（Damerau-Levenshtein + 真实命令 + 历史成功证据）
 │   ├── knowledge.py   错误签名 → 修复步骤知识库
-│   ├── hook.py        bash/zsh hook 生成与安装
+│   ├── hook.py        bash/zsh/fish hook 生成与安装
 │   ├── runner.py      cw run：捕获执行、即时诊断、安全自动修正
 │   ├── report.py      终端/Markdown/JSON 渲染
 │   ├── hints.py       各错误类别的 Ubuntu 处置建议
@@ -640,14 +677,16 @@ cmdwhy/
 │   ├── demo_data.py   内置演示数据
 │   ├── context.py     前后窗口任务推断与单条命令目的
 │   ├── planner.py     根据上下文和环境推断下一步（可自动执行）
-│   ├── search.py      关键词/错误/时间/项目搜索
-│   ├── resolve.py     history 编号 / 分析序号解析
+│   ├── search.py      关键词/正则/OR/相关度/错误/时间/项目搜索
+│   ├── cache.py       SQLite 解析缓存（脱敏、按 mtime/size 失效）
+│   ├── repairs.py     修复链人工确认/否定
+│   ├── resolve.py     history 编号 / 分析序号 / 稳定 ID 解析
 │   ├── guide.py       命令地图与 bash/zsh 补全脚本
 │   └── util.py        时间/路径/距离/颜色等工具
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             167 个单元 + 端到端 CLI 测试
+├── tests/             183 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

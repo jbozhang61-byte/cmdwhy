@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
 from . import errors as err_mod
+from . import repairs
 from .config import Config
 from .context import attach_contexts
 from .env import EnvCache
@@ -614,6 +615,11 @@ def analyze(events, cfg=None, meta=None, with_context=True) -> Analysis:
         warnings=meta.get("warnings", []),
         envs=envs,
     )
+    try:
+        repairs.apply(result, repairs.load(cfg))
+    except (OSError, ValueError):
+        pass
+    result.stats = compute_stats(events, annotations, chains, sessions)
     if with_context:
         attach_contexts(result, getattr(cfg, "context_window", 20))
     return result

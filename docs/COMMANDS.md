@@ -1,6 +1,6 @@
 # cmdwhy 命令参考
 
-版本：0.2.0（`cmdwhy version` 可查看当前安装版本）
+版本：0.3.0（`cmdwhy version` 可查看当前安装版本）
 
 所有命令都支持全局参数，位置随意：
 
@@ -33,14 +33,15 @@ cmdwhy --no-color timeline   # 适合重定向到文件
 | `report` | 四段式复盘 | 写复盘、周报 |
 | `stats` | 统计 | 看错误率、修复耗时 |
 | `sessions` | 会话列表 | 先定位会话编号 |
-| `summary` | 按会话总结 | 快速回顾一次会话 |
+| `summary` | 按会话/时间段/项目总结 | 快速回顾一次会话或今天/本周 |
 | `changes` | 环境/状态变化 | 看安装了什么、切了什么分支 |
 | `additions` | 首次出现的新命令 | 回顾新工具 |
 | `history` | history 风格编号列表 | 重复命令要区分是哪一次 |
-| `search` | 搜索命令/错误/时间/项目 | 查找某类操作 |
+| `search` | 搜索命令/错误/时间/项目，支持正则/OR/相关度 | 查找某类操作 |
 | `digest` | 随机回看会话 | 随机抽查自己的操作 |
 | `fix` | 输入纠错 | 命令打错、找不到命令 |
 | `diagnose` | 同类错误检索 | 又遇到熟悉的报错 |
+| `repair` | 修复链因果图与人工纠正 | 这条不是修复 |
 | `kb` | 错误知识库 | 查看/导出修法 |
 | `hook` | bash/zsh/fish hook | 让新命令带退出码 |
 | `run` | 包装执行 + 即时诊断 | 想拿到精确 stderr；`--shell` 支持管道 |
@@ -101,7 +102,7 @@ cmdwhy version
 
 ### cmdwhy ingest
 
-解析配置里的历史来源（bash / zsh / fish / JSONL），做环境推断、错误签名、修复链分析，并把**验证过**的修法写入 `knowledge.json`。
+解析配置里的历史来源（bash / zsh / fish / JSONL），做环境推断、错误签名、修复链分析，并把**验证过**的修法写入 `knowledge.json`。历史文件的解析结果会按 mtime/size + redact 配置缓存到 `cache.db`（SQLite，内容已脱敏）；文件改动自动失效。
 
 ```bash
 cmdwhy ingest
@@ -177,10 +178,14 @@ cmdwhy search --error PORT --since 7d
 cmdwhy search --status fail --project api
 cmdwhy search --session S2 --oldest
 cmdwhy search --since today --until "2026-11-17 18:00"
+cmdwhy search --regex 'PORT|EADDRINUSE'
+cmdwhy search --any npm pnpm yarn
+cmdwhy search git push --sort relevance
 cmdwhy search git --json
 `@
 
-- 多个关键词是 AND；匹配命令文本、意图、任务、目的、错误签名/原文、项目名、cwd；
+- 默认多个关键词是 AND；--any 改为 OR；--regex 把查询当正则；--sort relevance 按相关度排序；
+- 匹配命令文本、意图、任务、目的、错误签名/原文、项目名、cwd；
 - `--status`：`ok` / `fail` / `unknown`（`fail` 包含疑似失败）；
 - `--error`：按错误签名或类别子串匹配，如 `PORT:3000`、`PERM`；
 - `--since/--until`：`7d`、`24h`、`30m`、`2w`、`today`、`yesterday`、`2026-11-17 [HH:MM]`；
@@ -193,6 +198,10 @@ cmdwhy search git --json
 cmdwhy summary
 cmdwhy summary --session S2
 cmdwhy summary --all
+cmdwhy summary --today
+cmdwhy summary --week
+cmdwhy summary --project api
+cmdwhy summary --since 7d
 cmdwhy summary --json
 `@
 
@@ -209,12 +218,17 @@ cmdwhy summary --json
 
 默认显示最近 5 个会话，`--all` 显示全部。
 
+`--today` / `--week`（周一开始）/ `--project` / `--since` / `--until` 不按会话拆分，而是输出聚合概要：命令数、会话数、报错、修复、任务、错误签名、改变。
+
+`--today` / `--week`（周一开始）/ `--project` / `--since` / `--until` 不按会话拆分，而是输出聚合概要：命令数、会话数、报错、修复、任务、错误签名、改变。
+
 ### cmdwhy timeline
 
 ```bash
 cmdwhy timeline
 cmdwhy timeline -n 50
 cmdwhy timeline --session S2
+cmdwhy timeline --page 2 --page-size 20   # 分页
 cmdwhy timeline -v              # 显示全部证据
 cmdwhy timeline --json
 ```
@@ -354,7 +368,7 @@ cmdwhy fix "git stauts" --json
 
 候选来源：PATH 可执行文件、shell 内建、合法子命令、你成功用过的历史命令。评分考虑 Damerau-Levenshtein 距离、键盘相邻键、首字母、历史使用次数、下一个词是否是候选子命令；危险命令降权。
 
-除了拼写，还会按错误类型给出修正：`PERM:exec` → `chmod +x`；Docker 权限 → `sudo`；`GIT_REJECT` → `git pull --rebase`；`PIP668` → 创建 venv；`MODULE` → `pip install <模块>`。
+除了拼写，还会按错误类型给出修正：`PERM:exec` → `chmod +x`；Docker 权限 → `sudo`；`GIT_REJECT` → `git pull --rebase`；`PIP668` → 创建 venv；`MODULE` → `pip install <模块>`；`python` → `python3`；`cd` 到不存在的目录 → 最接近的兄弟目录或 `mkdir -p`；文件父目录不存在 → `mkdir -p <父目录>`。
 
 ### cmdwhy diagnose
 
@@ -369,6 +383,18 @@ cmdwhy diagnose --text "..." --json
 ```
 
 检索顺序：同签名精确匹配 → 同类别兜底 → 错误原文相似度（路径/PID 不同也能匹配）。命中后给出你以前**验证有效**的修法，再给通用建议，最后（`--fix`）给输入纠正。
+
+### cmdwhy repair
+
+查看失败 → 修复动作 → 验证的因果图，并允许人工纠正：
+
+    cmdwhy repair graph
+    cmdwhy repair reject '#19'    # 第 19 条不是对上一条失败的修复
+    cmdwhy repair accept '#19'    # 确认这条修复链成立
+    cmdwhy repair list
+
+纠正按失败事件的稳定 ID 持久化到 repairs.json；之后 explain、报告和知识库学习都会尊重它。
+
 
 ### cmdwhy kb
 

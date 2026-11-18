@@ -66,7 +66,9 @@ def _normalize_risk(command, risk):
         return "high"
     if re.search(r"\bsystemctl\b.*\b(start|stop|restart|reload|enable|disable)\b", lower):
         return "high"
-    if re.search(r"\b(chmod|chown|kill|pkill|git\s+(pull|push|reset|checkout)|pip\s+install|npm\s+install|python3\s+-m\s+venv)\b", lower):
+    if re.search(r"\b(terraform\s+(apply|destroy)|kubectl\s+(apply|delete|patch)|docker\s+compose\s+(up|down))\b", lower):
+        return "high"
+    if re.search(r"\b(chmod|chown|kill|pkill|git\s+(pull|push|reset|checkout)|pip\s+install|npm\s+install|python3\s+-m\s+venv|composer\s+install|bundle\s+install|go\s+mod\s+tidy|dotnet\s+build|cargo\s+build)\b", lower):
         return "medium" if risk == "low" else risk
     return risk
 
@@ -239,6 +241,32 @@ def build_plan(analysis, knowledge=None, cwd=None, limit=5, focus_seq=None):
                         add("npm test", "运行 package.json 里的测试脚本", "inspect", "low", "low")
                 except (OSError, ValueError):
                     pass
+        elif kind == "go":
+            add("go test ./...", "跑 Go 测试确认项目状态", "inspect", "low", "low")
+            if not os.path.exists(os.path.join(cwd, "go.sum")):
+                add("go mod tidy", "补齐 go.sum 并整理依赖", "setup", "medium", "low")
+        elif kind == "rust":
+            add("cargo test", "跑 Rust 测试确认项目状态", "inspect", "low", "low")
+        elif kind == "java":
+            if os.path.exists(os.path.join(cwd, "mvnw")):
+                add("./mvnw test", "跑 Maven 测试确认项目状态", "inspect", "low", "low")
+            elif os.path.exists(os.path.join(cwd, "pom.xml")):
+                add("mvn test", "跑 Maven 测试确认项目状态", "inspect", "low", "low")
+            elif os.path.exists(os.path.join(cwd, "gradlew")):
+                add("./gradlew test", "跑 Gradle 测试确认项目状态", "inspect", "low", "low")
+        elif kind == "ruby":
+            add("bundle exec rspec", "跑 Ruby 测试确认项目状态", "inspect", "low", "low")
+        elif kind == "php":
+            if os.path.isdir(os.path.join(cwd, "vendor")):
+                add("vendor/bin/phpunit", "跑 PHPUnit 确认项目状态", "inspect", "low", "low")
+            else:
+                add("composer install", "安装 Composer 依赖", "setup", "medium", "low")
+        elif kind == "dotnet":
+            add("dotnet test", "跑 .NET 测试确认项目状态", "inspect", "low", "low")
+        elif kind == "terraform":
+            add("terraform plan", "先看 Terraform 计划，不直接 apply", "inspect", "low", "medium")
+        elif kind == "kubernetes":
+            add("kubectl get pods", "查看 Pod 状态", "inspect", "low", "low")
         if _git_dirty(cwd):
             add("git diff --stat", "查看未提交改动，决定是否提交", "inspect", "low", "low")
         if context is not None and context.label.startswith("Python") and not ann.fix_of:

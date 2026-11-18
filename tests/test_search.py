@@ -69,6 +69,26 @@ class SearchTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_time("not-a-time")
 
+
+    def test_regex(self):
+        results, _total = search_events(self.analysis, query="flask|docker", regex=True)
+        seqs = [result.seq for result in results]
+        self.assertIn(3, seqs)
+        self.assertIn(28, seqs)
+
+    def test_any_term(self):
+        results, _total = search_events(self.analysis, query="flask zzz-no-such-word", any_term=True)
+        self.assertIn(3, [result.seq for result in results])
+
+    def test_relevance_sort(self):
+        results, _total = search_events(self.analysis, query="git push", sort="relevance", limit=5)
+        self.assertTrue(results)
+        self.assertGreaterEqual(results[0].score, results[-1].score)
+
+    def test_invalid_regex(self):
+        with self.assertRaises(ValueError):
+            search_events(self.analysis, query="[", regex=True)
+
     def test_result_fields(self):
         results, _total = search_events(self.analysis, query="npm", limit=1)
         data = results[0].to_dict()

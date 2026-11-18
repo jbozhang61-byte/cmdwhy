@@ -76,6 +76,35 @@ class TypoTest(unittest.TestCase):
         self.assertTrue(fixes)
         self.assertEqual(fixes[0].command, "git pull --rebase")
 
+
+    def test_python3_alias(self):
+        from unittest.mock import patch
+
+        from cmdwhy.errors import classify_text
+
+        error = classify_text("bash: python: command not found")
+        with patch("cmdwhy.typo.shutil.which", return_value="/usr/bin/python3"):
+            fixes = propose_fixes("python app.py", error=error)
+        self.assertTrue(fixes)
+        self.assertEqual(fixes[0].command, "python3 app.py")
+
+    def test_missing_directory_suggestion(self):
+        import os
+        import shutil
+        import tempfile
+
+        from cmdwhy.errors import classify_text
+
+        root = tempfile.mkdtemp(prefix="cmdwhy-cd-")
+        try:
+            os.mkdir(os.path.join(root, "work"))
+            error = classify_text("cd: no such file or directory", cmd="cd wrok")
+            fixes = propose_fixes("cd " + os.path.join(root, "wrok"), error=error)
+            self.assertTrue(fixes)
+            self.assertTrue(fixes[0].command.replace("\\", "/").endswith("/work"))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_sudo_suggestion(self):
         from cmdwhy.errors import classify_text
 

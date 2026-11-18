@@ -8,6 +8,20 @@ from dataclasses import dataclass, field
 from .util import first_line, strip_ansi, truncate
 
 RULES = (
+    ("GIT_AUTH", re.compile(r"authentication failed for .*https|fatal: authentication|could not read username|http 401|invalid username or password", re.I)),
+    ("SSH", re.compile(r"permission denied \(publickey|host key verification failed|connection closed by remote host|too many authentication failures", re.I)),
+    ("K8S", re.compile(r"kubectl|unable to connect to the server|crashloopbackoff|containercreating|forbidden.*(?:pods|services|deployments)|no resources found", re.I)),
+    ("DB", re.compile(r"psql|mysql|mariadb|redis|mongodb|mongo|postgres|could not connect to server|too many connections|relation .* does not exist|access denied for user", re.I)),
+    ("TLS", re.compile(r"certificate verify failed|x509|ssl error|tls handshake|unknown ca|self[- ]signed certificate", re.I)),
+    ("READONLY", re.compile(r"read-only file system|readonly database|attempt to write a readonly database", re.I)),
+    ("TEST_FAIL", re.compile(r"assertionerror|tests? failed|failed tests?|test suite failed|npm err! test failed|pytest.*failed", re.I)),
+    ("DEPENDENCY", re.compile(r"eresolve|peer dep|dependency conflict|cannot satisfy|conflicting dependencies|requires .* but", re.I)),
+    ("YAML", re.compile(r"yaml\.scanner|mapping values are not allowed|expected <block end>|could not find expected ':'", re.I)),
+    ("JSON_DECODE", re.compile(r"jsondecodeerror|json\.decoder|unexpected token .* in json|invalid json", re.I)),
+    ("COMPOSE", re.compile(r"docker[- ]compose|compose\.ya?ml|service .* failed to build", re.I)),
+    ("JAVA", re.compile(r"unsupportedclassversionerror|java_home|no suitable java|maven.*failed|gradle.*failed", re.I)),
+    ("RUST", re.compile(r"error\[e\d+\]|cargo (?:build|test|run).*failed|cannot find crate|rustc", re.I)),
+    ("GO", re.compile(r"go: .*|missing go\.sum|module .* not found|go mod", re.I)),
     ("PIP668", re.compile(r"externally-managed-environment|pep[ -]?668|break-system-packages", re.I)),
     (
         "DOCKER",
@@ -178,6 +192,45 @@ def _extract_port(text, cmd):
 
 def _qualifier(category, text, cmd):
     low = (text or "").lower()
+    if category == "DB":
+        for name in ("postgres", "mysql", "mariadb", "redis", "mongo"):
+            if name in low:
+                return name
+        return "connection"
+    if category == "SSH":
+        if "publickey" in low:
+            return "publickey"
+        if "host key" in low:
+            return "hostkey"
+        return "connection"
+    if category == "GIT_AUTH":
+        return "http"
+    if category == "K8S":
+        if "forbidden" in low:
+            return "forbidden"
+        if "crashloop" in low or "containercreating" in low:
+            return "pod"
+        return "connect"
+    if category == "TEST_FAIL":
+        for name in ("pytest", "npm", "jest", "maven", "gradle", "go test"):
+            if name in low:
+                return name.replace(" ", "-")
+        return "generic"
+    if category == "DEPENDENCY":
+        for name in ("npm", "pip", "poetry", "cargo", "yarn"):
+            if name in low:
+                return name
+        return "generic"
+    if category == "TLS":
+        return "certificate"
+    if category == "JAVA":
+        return "version" if "unsupportedclassversion" in low else "build"
+    if category == "RUST":
+        return "compile"
+    if category == "GO":
+        return "module"
+    if category == "COMPOSE":
+        return "build" if "build" in low else "runtime"
     if category == "PERM":
         if "docker" in low:
             return "docker"
@@ -226,7 +279,7 @@ def _detail_line(text):
             continue
         if not fallback:
             fallback = line
-        if re.search(r"error|denied|not found|failed|rejected|refused|cannot|exception|traceback", line, re.I):
+        if re.search(r"error|denied|not found|failed|rejected|refused|cannot|exception|traceback|panic|fatal|conflict", line, re.I):
             chosen = line
     return truncate(first_line(chosen or fallback, 200), 170)
 

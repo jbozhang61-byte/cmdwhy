@@ -8,6 +8,7 @@ import re
 from collections import Counter
 from datetime import datetime
 
+from . import cache
 from .model import Event
 from .redact import redact_command, redact_error
 from .util import append_line, new_uid, stable_uid
@@ -321,7 +322,12 @@ def load_events(cfg, extra_paths=None, use_store=True):
     specs = cfg.sources if extra_paths is None else list(extra_paths)
     for path in cfg.expand_sources(specs):
         try:
-            parsed, fmt = parse_file(path)
+            cached = cache.get(cfg, path, cfg.redact)
+            if cached is not None:
+                parsed, fmt = cached
+            else:
+                parsed, fmt = parse_file(path)
+                cache.put(cfg, path, fmt, parsed, cfg.redact)
         except OSError as exc:
             warnings.append("无法读取 %s：%s" % (path, exc))
             continue

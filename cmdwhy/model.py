@@ -258,6 +258,8 @@ class EnvInfo:
     is_root: bool = False
     container: bool = False
     ssh: bool = False
+    wsl: bool = False
+    pkg_manager: str = None
     shell: str = None
 
     def short(self, home=None, width=34) -> str:
@@ -295,6 +297,10 @@ class EnvInfo:
             bits.append("容器内")
         if self.ssh:
             bits.append("SSH 会话")
+        if self.wsl:
+            bits.append("WSL")
+        if self.pkg_manager:
+            bits.append("包管理 " + self.pkg_manager)
         return " · ".join(bits)
 
     def to_dict(self) -> dict:
@@ -313,6 +319,8 @@ class EnvInfo:
             "is_root": self.is_root,
             "container": self.container,
             "ssh": self.ssh,
+            "wsl": self.wsl,
+            "pkg_manager": self.pkg_manager,
             "shell": self.shell,
         }
 

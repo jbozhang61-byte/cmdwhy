@@ -52,6 +52,30 @@ class ErrorsTest(unittest.TestCase):
         info = classify_event(Event(cmd="./deploy.sh", exit_code=126))
         self.assertEqual(info.signature, "PERM:exec")
 
+
+    def test_rich_error_signatures(self):
+        cases = [
+            ("fatal: Authentication failed for 'https://github.com/x/y.git'", "GIT_AUTH"),
+            ("Permission denied (publickey).", "SSH"),
+            ("npm ERR! ERESOLVE unable to resolve dependency tree", "DEPENDENCY"),
+            ("yaml.scanner.ScannerError: mapping values are not allowed here", "YAML"),
+            ("SSL certificate problem: certificate verify failed", "TLS"),
+            ("Read-only file system", "READONLY"),
+            ("go: missing go.sum entry for module", "GO"),
+            ("error[E0308]: mismatched types", "RUST"),
+            ("UnsupportedClassVersionError: class file version 61.0", "JAVA"),
+            ("psql: error: could not connect to server", "DB"),
+        ]
+        for text, category in cases:
+            info = classify_text(text)
+            self.assertEqual(info.category, category, text)
+
+    def test_test_failure_and_k8s(self):
+        pytest_fail = classify_text("FAILED tests/test_a.py::test_x - AssertionError: 1 != 2")
+        self.assertEqual(pytest_fail.category, "TEST_FAIL")
+        pod = classify_text("Warning  BackOff  pod is in CrashLoopBackOff")
+        self.assertEqual(pod.category, "K8S")
+
     def test_normalize_stable(self):
         a = normalize_error_text("FileNotFoundError: /home/a/x.py line 42 at 12:30:01")
         b = normalize_error_text("FileNotFoundError: /home/b/y.py line 7 at 09:11:55")

@@ -66,6 +66,14 @@ class Config:
         return os.path.join(self.home, "events.jsonl")
 
     @property
+    def cache_path(self) -> str:
+        return os.path.join(self.home, "cache.db")
+
+    @property
+    def repairs_path(self) -> str:
+        return os.path.join(self.home, "repairs.json")
+
+    @property
     def knowledge_path(self) -> str:
         return os.path.join(self.home, "knowledge.json")
 

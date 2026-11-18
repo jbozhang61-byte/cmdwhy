@@ -70,6 +70,12 @@ class Renderer:
             parts.append("venv:" + env.venv)
         if env.distro:
             parts.append(env.distro)
+        if env.wsl:
+            parts.append("WSL")
+        elif env.container:
+            parts.append("container")
+        if env.ssh:
+            parts.append("ssh")
         return parts
 
     def _env_line(self, env):
@@ -119,7 +125,7 @@ class Renderer:
 
     # ------------------------------------------------------------ 时间线
 
-    def render_timeline(self, analysis, limit=20, sid=None, verbose=False):
+    def render_timeline(self, analysis, limit=20, sid=None, verbose=False, page=None, page_size=20):
         if not analysis.events:
             return "没有命令记录。先运行 " + self.p.bold("cmdwhy ingest") + " 或 " + self.p.bold("cmdwhy hook install") + "。"
         events = analysis.events
@@ -127,18 +133,25 @@ class Renderer:
             events = [ev for ev in events if ev.sid == sid]
             if not events:
                 return "没有找到会话 %s。" % sid
-        shown = events[-limit:]
+        if page:
+            page_size = max(1, int(page_size or 20))
+            pages = max(1, (len(events) + page_size - 1) // page_size)
+            page = max(1, min(int(page), pages))
+            shown = events[(page - 1) * page_size : page * page_size]
+            meta = "第 %d/%d 页 · 本页 %d 条 / 共 %d 条 · %d 个会话" % (
+                page,
+                pages,
+                len(shown),
+                len(analysis.events),
+                len(analysis.sessions),
+            )
+        else:
+            shown = events[-limit:]
+            meta = "最近 %d 条 / 共 %d 条 · %d 个会话" % (len(shown), len(analysis.events), len(analysis.sessions))
         shown_seqs = {ev.seq for ev in shown}
         lines = []
         title = self.p.bold("命令时间线")
-        lines.append(
-            title
-            + "  "
-            + self.p(
-                "最近 %d 条 / 共 %d 条 · %d 个会话" % (len(shown), len(analysis.events), len(analysis.sessions)),
-                "grey",
-            )
-        )
+        lines.append(title + "  " + self.p(meta, "grey"))
         if any(event.hist_id is not None for event in analysis.events):
             hint = "h518 = history 编号；e1a2b3c4 = 稳定 ID；#18 = 当前顺序（新增历史会变）。推荐 cmdwhy explain e1a2b3c4"
         else:
@@ -251,6 +264,56 @@ class Renderer:
         lines.append(p("重复命令会显示“第 k/n 次”，每个编号对应一次具体执行，可直接 cmdwhy explain <编号>。", "grey"))
         return "\n".join(lines).rstrip()
 
+    def render_overview(self, analysis, events, title):
+        p = self.p
+        events = list(events)
+        if not events:
+            return p.bold(title) + "\n\n该范围内没有命令。"
+        sessions = {event.sid for event in events if event.sid}
+        fails = [
+            analysis.ann(event.seq)
+            for event in events
+            if analysis.ann(event.seq).status in (STATUS_FAIL, STATUS_SUSPECT)
+        ]
+        fixes = [analysis.ann(event.seq) for event in events if analysis.ann(event.seq).steps]
+        verified = sum(1 for ann in fixes if ann.verified)
+        lines = [
+            p.bold(title)
+            + "  "
+            + p(
+                "%d 条命令 · %d 个会话 · %d 处报错 · %d 个修复（%d 已验证）"
+                % (len(events), len(sessions), len(fails), len(fixes), verified),
+                "grey",
+            )
+        ]
+        tasks = []
+        for event in events:
+            task = analysis.ann(event.seq).task
+            if task and task != "日常操作" and task not in tasks:
+                tasks.append(task)
+        if tasks:
+            lines.append("   任务  " + " · ".join(tasks[:5]))
+        error_counts = Counter(ann.error.signature for ann in fails if ann.error is not None)
+        if error_counts:
+            lines.append(
+                "   错误  " + " · ".join("%s ×%d" % (name, count) for name, count in error_counts.most_common(6))
+            )
+        steps = []
+        for ann in fixes:
+            for step in ann.steps:
+                if step not in steps:
+                    steps.append(step)
+        if steps:
+            lines.append("   修复  " + " › ".join(truncate(step, 34) for step in steps[:6]))
+        changes = []
+        for event in events:
+            for change in analysis.ann(event.seq).changes:
+                if change not in changes:
+                    changes.append(change)
+        if changes:
+            lines.append("   改变  " + " · ".join(changes[:6]))
+        return "\n".join(lines).rstrip()
+
     # ------------------------------------------------------------ 会话概要
 
     def render_summary(self, analysis, sessions):
@@ -305,6 +368,51 @@ class Renderer:
                         changes.append(change)
             if changes:
                 lines.append("   改变  " + " · ".join(changes[:4]))
+        return "\n".join(lines).rstrip()
+
+    def render_repair_graph(self, analysis, corrections=None):
+        p = self.p
+        corrections = corrections or {}
+        rejected = corrections.get("rejected") or {}
+        lines = [p.bold("修复链图") + "  " + p("失败 → 修复动作 → 验证", "grey")]
+        shown = 0
+        for ann in analysis.anns:
+            event = analysis.event(ann.seq)
+            if ann.fix_of:
+                continue
+            if not ann.steps and event.uid not in rejected:
+                continue
+            source = ann
+            source_event = event
+            lines.append("")
+            lines.append(
+                "  %s  %s"
+                % (
+                    self._ref(analysis, source.seq),
+                    p(source.error.signature if source.error else "失败", "red"),
+                )
+            )
+            if source_event.uid in rejected:
+                lines.append("    " + p("✗ 用户标记：这条不是修复", "yellow"))
+                shown += 1
+                continue
+            for step in ann.steps or source.steps:
+                lines.append("    └─ " + p(truncate(step, 80), "bold"))
+            if ann.verified_at:
+                lines.append(
+                    "        └─ "
+                    + p("✓ ", "green")
+                    + self._ref(analysis, ann.verified_at)
+                    + " 重跑成功"
+                )
+            elif ann.verified:
+                lines.append("        └─ " + p("✓ 已验证", "green"))
+            else:
+                lines.append("        └─ " + p("未验证", "yellow"))
+            shown += 1
+        if not shown:
+            lines.append("")
+            lines.append("还没有可展示的修复链。")
         return "\n".join(lines).rstrip()
 
     # ------------------------------------------------------------ 搜索
@@ -440,6 +548,8 @@ class Renderer:
                 lines.append("目标    " + ann.task_goal)
             if ann.purpose:
                 lines.append("目的    " + ann.purpose)
+            if ann.note:
+                lines.append("纠正    " + self.p(ann.note, "yellow"))
             if ann.error is not None:
                 prefix = "推测" if ann.error.inferred else "报错"
                 lines.append("错误    " + self.p(ann.error.signature, "bold") + "  " + ann.error.detail)

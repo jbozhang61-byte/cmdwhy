@@ -7,9 +7,11 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timedelta
 
 from . import __version__
 from . import errors as err_mod
+from . import repairs
 from .analyze import analyze
 from .config import Config, config_for, default_home
 from .context import attach_contexts
@@ -117,6 +119,8 @@ def build_parser():
     p = sub.add_parser("timeline", help="按会话展示逐条命令注解")
     p.add_argument("-n", "--limit", type=int, default=20, help="显示最近多少条")
     p.add_argument("--session", help="只看某个会话，如 S2")
+    p.add_argument("--page", type=int, default=None, help="分页页码，从 1 开始")
+    p.add_argument("--page-size", type=int, default=20, help="每页条数（配合 --page）")
     p.add_argument("-v", "--verbose", action="store_true", help="显示所有证据")
     p.set_defaults(func=cmd_timeline)
 
@@ -139,9 +143,14 @@ def build_parser():
     p = sub.add_parser("sessions", help="列出会话及每个会话的环境")
     p.set_defaults(func=cmd_sessions)
 
-    p = sub.add_parser("summary", help="按会话总结：在做什么、错在哪、怎么修的")
+    p = sub.add_parser("summary", help="按会话/时间段/项目总结：在做什么、错在哪、怎么修的")
     p.add_argument("--session", help="只看某个会话，如 S2")
     p.add_argument("--all", action="store_true", help="显示全部会话（默认最近 5 个）")
+    p.add_argument("--today", action="store_true", help="只看今天")
+    p.add_argument("--week", action="store_true", help="只看本周（周一开始）")
+    p.add_argument("--project", help="只看某个项目或 cwd")
+    p.add_argument("--since", help="起始时间：7d / today / 2026-11-17")
+    p.add_argument("--until", help="结束时间")
     p.set_defaults(func=cmd_summary)
 
     p = sub.add_parser("changes", help="列出环境/状态变化（cd、安装、分支、服务…）")
@@ -168,6 +177,9 @@ def build_parser():
     p.add_argument("--until", help="结束时间，格式同上")
     p.add_argument("-n", "--limit", type=int, default=30, help="最多显示多少条，0 表示全部")
     p.add_argument("--oldest", action="store_true", help="按时间正序（默认最新在前）")
+    p.add_argument("--regex", action="store_true", help="把关键词当成正则表达式")
+    p.add_argument("--any", dest="any_term", action="store_true", help="多个关键词任一匹配即可（默认 AND）")
+    p.add_argument("--sort", choices=["time", "relevance"], default="time", help="排序：时间或相关度")
     p.set_defaults(func=cmd_search)
 
     p = sub.add_parser("digest", help="随机回看几个会话（随机）")
@@ -180,6 +192,11 @@ def build_parser():
     p.add_argument("--top", type=int, default=3)
     p.add_argument("--last", action="store_true", help="检查上一条失败的命令")
     p.set_defaults(func=cmd_fix)
+
+    p = sub.add_parser("repair", help="查看/纠正修复链：确认或否定“这条不是修复”")
+    p.add_argument("action", choices=["list", "graph", "reject", "accept"])
+    p.add_argument("target", nargs="?", help="修复动作的编号（history/#/e 稳定 ID）")
+    p.set_defaults(func=cmd_repair)
 
     p = sub.add_parser("diagnose", help="检索同类错误：以前怎么修好的、这次该怎么改")
     p.add_argument("--last", action="store_true", help="诊断最近一次失败")
@@ -305,6 +322,7 @@ HELP_DESCRIPTIONS = {
     "digest": "随机抽取几个会话做回顾，默认输出意图、报错和修复动作。",
     "fix": "检查命令输入：在 PATH、合法子命令和你成功用过的历史里找最像的命令，给出可直接执行的修正。",
     "diagnose": "检索同类错误：按错误签名或原文相似度，给出你以前验证有效的修法，以及 Ubuntu 通用处置建议。",
+    "repair": "查看修复链因果图，并把“这条不是修复”持久化；之后 explain/诊断会尊重你的纠正。",
     "kb": "查看、检索、导出或清空本地错误知识库（错误签名 -> 修复步骤）。",
     "hook": "安装/卸载/查看 bash、zsh、fish hook。hook 会把退出码、cwd、发行版写入事件文件，让之后的注解置信度更高。",
     "record": "内部命令：由 shell hook 调用，记录单条命令。一般不需要手动执行。",
@@ -333,6 +351,7 @@ HELP_EXAMPLES = {
     "digest": "  cmdwhy digest --random 2 --seed 7",
     "fix": "  cmdwhy fix 'git stauts'\n  cmdwhy fix 'gti status'\n  cmdwhy fix --last",
     "diagnose": "  cmdwhy diagnose\n  cmdwhy diagnose --text 'error: externally-managed-environment'\n  cmdwhy diagnose --signature PERM:dpkg-lock --fix",
+    "repair": "  cmdwhy repair graph\n  cmdwhy repair reject '#19'\n  cmdwhy repair accept '#19'",
     "kb": "  cmdwhy kb\n  cmdwhy kb --signature PORT:3000\n  cmdwhy kb --learn\n  cmdwhy kb --export kb.json",
     "hook": "  cmdwhy hook install\n  cmdwhy hook status\n  cmdwhy hook install --print --shell bash",
     "run": "  cmdwhy run -- npm run dev\n  cmdwhy run --fix -- python3 app.py\n  cw run --fix --yes -- git stauts",
@@ -500,7 +519,16 @@ def cmd_timeline(args, cfg, renderer):
     if not analysis.events:
         print("没有命令记录。先运行 cmdwhy ingest，或 cmdwhy demo 看效果。")
         return 1
-    print(renderer.render_timeline(analysis, limit=args.limit, sid=args.session, verbose=args.verbose))
+    print(
+        renderer.render_timeline(
+            analysis,
+            limit=args.limit,
+            sid=args.session,
+            verbose=args.verbose,
+            page=args.page,
+            page_size=args.page_size,
+        )
+    )
     return 0
 
 
@@ -595,6 +623,69 @@ def cmd_summary(args, cfg, renderer):
     if not analysis.events:
         print("没有命令记录。")
         return 1
+
+    since_ts = None
+    until_ts = None
+    title = None
+    try:
+        if args.since:
+            since_ts = parse_time(args.since)
+        if args.until:
+            until_ts = parse_time(args.until)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.today:
+        since_ts = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        title = "今日概要"
+    elif args.week:
+        now = datetime.now()
+        monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        since_ts = monday.timestamp()
+        title = "本周概要"
+    if args.project and not title:
+        title = "项目 %s" % args.project
+    if since_ts is not None or until_ts is not None or args.project:
+        selected = []
+        needle = (args.project or "").lower()
+        for event in analysis.events:
+            if since_ts is not None and (not event.ts or event.ts < since_ts):
+                continue
+            if until_ts is not None and (not event.ts or event.ts > until_ts):
+                continue
+            env = analysis.envs.get(event.seq)
+            if needle:
+                haystack = " ".join(
+                    [event.cwd or "", (env.project if env is not None and env.project else "")]
+                ).lower()
+                if needle not in haystack:
+                    continue
+            selected.append(event)
+        if args.json:
+            fails = [
+                analysis.ann(event.seq)
+                for event in selected
+                if analysis.ann(event.seq).status in ("fail", "suspected")
+            ]
+            fixes = [
+                analysis.ann(event.seq)
+                for event in selected
+                if analysis.ann(event.seq).steps
+            ]
+            _print_json(
+                {
+                    "title": title or "时间范围概要",
+                    "events": len(selected),
+                    "sessions": len({event.sid for event in selected if event.sid}),
+                    "failures": len(fails),
+                    "fixes": len(fixes),
+                    "errors": [ann.error.signature for ann in fails if ann.error is not None],
+                }
+            )
+            return 0
+        print(renderer.render_overview(analysis, selected, title or "时间范围概要"))
+        return 0
+
     sessions = analysis.sessions
     if args.session:
         sessions = [session for session in sessions if session.sid == args.session]
@@ -692,18 +783,25 @@ def cmd_search(args, cfg, renderer):
         print(str(exc), file=sys.stderr)
         return 2
     query = " ".join(args.query).strip()
-    results, total = search_events(
-        analysis,
-        query=query,
-        status=args.status,
-        error=args.error,
-        since_ts=since_ts,
-        until_ts=until_ts,
-        session=args.session,
-        project=args.project,
-        limit=args.limit,
-        oldest=args.oldest,
-    )
+    try:
+        results, total = search_events(
+            analysis,
+            query=query,
+            status=args.status,
+            error=args.error,
+            since_ts=since_ts,
+            until_ts=until_ts,
+            session=args.session,
+            project=args.project,
+            limit=args.limit,
+            oldest=args.oldest,
+            regex=args.regex,
+            any_term=args.any_term,
+            sort=args.sort,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if args.json:
         _print_json([result.to_dict() for result in results])
         return 0
@@ -741,6 +839,61 @@ def _last_failure(analysis):
         if ann.status in ("fail", "suspected") and ann.error is not None:
             return ann
     return None
+
+
+def cmd_repair(args, cfg, renderer):
+    analysis, meta = _analysis(cfg)
+    data = repairs.load(cfg)
+    if args.action == "graph":
+        print(renderer.render_repair_graph(analysis, data))
+        return 0
+    if args.action == "list":
+        rejected = data.get("rejected") or {}
+        accepted = data.get("accepted") or {}
+        by_uid = {event.uid: event for event in analysis.events}
+        lines = [renderer.p.bold("修复链纠正")]
+        if rejected:
+            lines.append("  已否定：")
+            for uid, repair_uid in rejected.items():
+                event = by_uid.get(uid)
+                label = event.cmd if event is not None else uid
+                lines.append("    %s  %s" % (renderer._ref(analysis, event.seq) if event else uid, label))
+        if accepted:
+            lines.append("  已确认：")
+            for uid in accepted:
+                event = by_uid.get(uid)
+                if event is not None:
+                    lines.append("    %s  %s" % (renderer._ref(analysis, event.seq), event.cmd))
+        if not rejected and not accepted:
+            lines.append("  还没有人工纠正。")
+        print("\n".join(lines))
+        return 0
+    if not args.target:
+        print("用法：cmdwhy repair reject <修复动作编号>", file=sys.stderr)
+        return 2
+    seqs, notes = resolve_targets(analysis, [args.target])
+    if not seqs:
+        print("没有找到目标。")
+        for note in notes:
+            print("  " + note)
+        return 2
+    seq = seqs[0]
+    ann = analysis.ann(seq)
+    event = analysis.event(seq)
+    if ann.fix_of:
+        failure = analysis.event(ann.fix_of[0])
+    elif ann.steps:
+        failure = event
+    else:
+        print("这条命令没有可纠正的修复链。先看 cmdwhy repair graph。")
+        return 1
+    if args.action == "reject":
+        repairs.reject(cfg, failure.uid, event.uid)
+        print("已标记：%s 不是对 %s 的修复。" % (event.cmd, failure.cmd))
+    else:
+        repairs.accept(cfg, failure.uid)
+        print("已确认：%s 是对 %s 的修复。" % (event.cmd, failure.cmd))
+    return 0
 
 
 def cmd_fix(args, cfg, renderer):

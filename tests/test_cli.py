@@ -320,6 +320,50 @@ class CliTest(unittest.TestCase):
 
 
 
+
+    def test_timeline_pagination(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        first = self.run_cli("timeline", "--page", "1", "--page-size", "2", expect=0).stdout
+        second = self.run_cli("timeline", "--page", "2", "--page-size", "2", expect=0).stdout
+        self.assertIn("第 1/", first)
+        self.assertIn("第 2/", second)
+        self.assertNotEqual(first, second)
+
+    def test_summary_project_and_period(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        data = json.loads(self.run_cli("summary", "--project", "api", "--json", expect=0).stdout)
+        self.assertGreater(data["events"], 0)
+        text = self.run_cli("summary", "--since", "2000-01-01", expect=0).stdout
+        self.assertIn("时间范围概要", text)
+
+    def test_search_regex_any_relevance(self):
+        path = self.write_events()
+        self.run_cli("ingest", "--file", path, expect=0)
+        regex = self.run_cli("search", "--regex", "git|ls", expect=0).stdout
+        self.assertIn("git", regex)
+        any_term = self.run_cli("search", "--any", "git", "zzz", expect=0).stdout
+        self.assertIn("git", any_term)
+        ordered = self.run_cli("search", "git", "push", "--sort", "relevance", expect=0).stdout
+        self.assertIn("git push", ordered)
+        bad = self.run_cli("search", "--regex", "[", expect=2)
+        self.assertIn("正则表达式无效", bad.stderr)
+
+
+    def test_repair_correction(self):
+        self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
+        before = self.run_cli("explain", "#18", expect=0).stdout
+        self.assertIn("修复", before)
+        graph = self.run_cli("repair", "graph", expect=0).stdout
+        self.assertIn("修复链图", graph)
+        self.run_cli("repair", "reject", "#19", expect=0)
+        after = self.run_cli("explain", "#18", expect=0).stdout
+        self.assertIn("这不是修复", after)
+        listed = self.run_cli("repair", "list", expect=0).stdout
+        self.assertIn("已否定", listed)
+        self.run_cli("repair", "accept", "#19", expect=0)
+
     def test_summary(self):
         path = self.write_events()
         self.run_cli("ingest", "--file", path, expect=0)
@@ -485,7 +529,7 @@ class CliTest(unittest.TestCase):
 
     def test_version(self):
         proc = self.run_cli("version", expect=0)
-        self.assertIn("cmdwhy 0.2.0", proc.stdout)
+        self.assertIn("cmdwhy 0.3.0", proc.stdout)
 
     def test_analyze_demo_file(self):
         proc = self.run_cli("analyze", "examples/demo_history.jsonl", "-n", "4", expect=0)

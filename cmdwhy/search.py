@@ -21,6 +21,7 @@ class SearchResult:
     error: str
     project: str
     cwd: str
+    score: float = 0.0
 
     def to_dict(self):
         return {
@@ -35,6 +36,7 @@ class SearchResult:
             "error": self.error,
             "project": self.project,
             "cwd": self.cwd,
+            "score": self.score,
         }
 
 
@@ -79,8 +81,20 @@ def search_events(
     project=None,
     limit=30,
     oldest=False,
+    regex=False,
+    any_term=False,
+    sort="time",
 ):
-    terms = [term.lower() for term in (query or "").split() if term]
+    raw_query = (query or "").strip()
+    if regex:
+        try:
+            pattern = re.compile(raw_query, re.I) if raw_query else None
+        except re.error as exc:
+            raise ValueError("正则表达式无效：%s" % exc)
+        terms = []
+    else:
+        pattern = None
+        terms = [term.lower() for term in raw_query.split() if term]
     error_needle = (error or "").lower()
     results = []
     total = 0
@@ -117,8 +131,26 @@ def search_events(
         ).lower()
         if error_needle and error_needle not in (error_signature + " " + error_detail).lower():
             continue
-        if terms and any(term not in haystack for term in terms):
-            continue
+        if pattern is not None:
+            if not pattern.search(haystack):
+                continue
+            score = 2.0 + len(pattern.findall(event.cmd)) * 2.0
+        else:
+            matched = [term for term in terms if term in haystack]
+            if terms and ((any_term and not matched) or (not any_term and len(matched) != len(terms))):
+                continue
+            score = 0.0
+            for term in matched:
+                if term in event.cmd.lower():
+                    score += 4.0
+                if term in (error_signature + " " + error_detail).lower():
+                    score += 3.0
+                if term in (ann.task or "").lower():
+                    score += 2.0
+                if term in (ann.intent or "").lower():
+                    score += 1.5
+                if term in ((env.project if env is not None and env.project else "") + " " + (event.cwd or "")).lower():
+                    score += 1.5
         result = SearchResult(
             seq=event.seq,
             uid=event.uid,
@@ -131,12 +163,16 @@ def search_events(
             error=error_signature,
             project=env.project if env is not None and env.project else "",
             cwd=event.cwd or "",
+            score=score,
         )
         if project and not _matches_project(result, project):
             continue
         results.append(result)
         total += 1
-    results.sort(key=lambda item: item.seq, reverse=not oldest)
+    if sort == "relevance":
+        results.sort(key=lambda item: (-item.score, -item.ts, -item.seq))
+    else:
+        results.sort(key=lambda item: item.seq, reverse=not oldest)
     if limit is not None and limit > 0:
         results = results[:limit]
     return results, total

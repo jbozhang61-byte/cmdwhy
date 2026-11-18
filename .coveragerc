@@ -1,0 +1,9 @@
+[run]
+source = cmdwhy
+omit =
+    tests/*
+    cmdwhy/demo_data.py
+
+[report]
+show_missing = True
+skip_empty = True

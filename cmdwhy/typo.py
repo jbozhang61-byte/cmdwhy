@@ -12,6 +12,7 @@ import math
 import os
 import re
 import shlex
+import shutil
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -429,6 +430,73 @@ def propose_fixes(cmd, index: CorpusIndex = None, error=None, limit=3):
                 reasons=["当前 Python 环境缺少 %s" % module, "注意要和 which python 指向同一个环境"],
             )
         )
+
+    # 3.6) python / pip 在 Ubuntu 上通常叫 python3 / pip3
+    if category == "CMD_NOT_FOUND" and head in ("python", "pip"):
+        alias = "python3" if head == "python" else "pip3"
+        if shutil.which(alias):
+            fixes.append(
+                Fix(
+                    command=_rebuild(tokens, 0, alias),
+                    kind="alias",
+                    score=0.9,
+                    confidence="high",
+                    reasons=["Ubuntu 默认没有 %s，但有 %s" % (head, alias)],
+                )
+            )
+
+    # 3.7) cd 到不存在的目录：先建目录，或改到最接近的兄弟目录
+    if head == "cd" and len(tokens) > 1 and "no such file" in (getattr(error, "text", "") or "").lower():
+        target = raw.split(maxsplit=1)[1].strip() if " " in raw else ""
+        if target[:1] in ("'", '"'):
+            target = target[1:-1]
+        parent = os.path.dirname(os.path.abspath(os.path.expanduser(target))) or "."
+        if os.path.isdir(parent):
+            base = os.path.basename(target.rstrip("/\\\\"))
+            candidates = [name for name in os.listdir(parent) if os.path.isdir(os.path.join(parent, name))]
+            best = None
+            best_score = 0.0
+            for name in candidates:
+                score = 1.0 - damerau(base.lower(), name.lower()) / float(max(1, len(base)))
+                if base[:1].lower() == name[:1].lower() and score > best_score and damerau(base.lower(), name.lower()) <= 2:
+                    best, best_score = name, score
+            if best:
+                fixes.append(
+                    Fix(
+                        command="cd " + os.path.join(parent, best),
+                        kind="path",
+                        score=0.75,
+                        confidence="medium",
+                        reasons=["最接近的目录是 %s" % best],
+                    )
+                )
+            else:
+                fixes.append(
+                    Fix(
+                        command="mkdir -p " + target,
+                        kind="mkdir",
+                        score=0.6,
+                        confidence="medium",
+                        reasons=["目录不存在，先创建再 cd"],
+                    )
+                )
+
+    # 3.8) 找不到文件时，补建父目录
+    if head in ("touch", "cat", "less", "vim") and len(tokens) > 1 and "no such file" in (getattr(error, "text", "") or "").lower():
+        target = raw.split(maxsplit=1)[1].strip() if " " in raw else ""
+        if target[:1] in ("'", '"'):
+            target = target[1:-1]
+        parent = os.path.dirname(os.path.abspath(os.path.expanduser(target))) or "."
+        if not os.path.isdir(parent):
+            fixes.append(
+                Fix(
+                    command="mkdir -p " + parent,
+                    kind="mkdir",
+                    score=0.6,
+                    confidence="medium",
+                    reasons=["父目录 %s 不存在" % parent],
+                )
+            )
 
     # 4) 找不到相近命令：提示"可能没安装"，而不是乱猜
     if not fixes and (category == "CMD_NOT_FOUND" or not is_known_command(head)):

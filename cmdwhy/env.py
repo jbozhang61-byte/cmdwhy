@@ -8,6 +8,7 @@ import os
 import platform
 import re
 import socket
+import shutil
 import subprocess
 from functools import lru_cache
 
@@ -24,16 +25,38 @@ PROJECT_MARKERS = (
     ("go.mod", "go"),
     ("Cargo.toml", "rust"),
     ("Gemfile", "ruby"),
+    ("composer.json", "php"),
     ("pom.xml", "java"),
     ("build.gradle", "java"),
+    ("build.gradle.kts", "java"),
     ("CMakeLists.txt", "cmake"),
     ("Makefile", "make"),
     ("docker-compose.yml", "docker"),
     ("compose.yaml", "docker"),
     ("Dockerfile", "docker"),
+    ("Chart.yaml", "kubernetes"),
+    ("kustomization.yaml", "kubernetes"),
+    ("main.tf", "terraform"),
+    ("terraform.tfstate", "terraform"),
 )
 
-KIND_ORDER = ("python", "django", "node", "typescript", "go", "rust", "java", "ruby", "cmake", "make", "docker")
+KIND_ORDER = (
+    "python",
+    "django",
+    "node",
+    "typescript",
+    "go",
+    "rust",
+    "java",
+    "ruby",
+    "php",
+    "dotnet",
+    "cmake",
+    "make",
+    "docker",
+    "kubernetes",
+    "terraform",
+)
 
 VENV_NAMES = (".venv", "venv", "env", ".env", "virtualenv")
 
@@ -88,6 +111,27 @@ def is_ssh() -> bool:
     return bool(os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CLIENT"))
 
 
+@lru_cache(maxsize=1)
+def is_wsl() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    try:
+        with open("/proc/version", "r", encoding="utf-8", errors="replace") as fh:
+            return "microsoft" in fh.read().lower()
+    except OSError:
+        return False
+
+
+@lru_cache(maxsize=1)
+def detect_pkg_manager():
+    if os.name == "nt":
+        return "winget" if shutil.which("winget") else None
+    for name in ("apt-get", "dnf", "pacman", "zypper", "apk", "brew"):
+        if shutil.which(name):
+            return "apt" if name == "apt-get" else name
+    return None
+
+
 def _git(cwd, args):
     try:
         proc = subprocess.run(
@@ -140,6 +184,13 @@ def detect_project(cwd):
         if any(os.path.exists(os.path.join(current, name)) for name, _ in PROJECT_MARKERS):
             root = current
             break
+        try:
+            current_names = os.listdir(current)
+        except OSError:
+            current_names = []
+        if any(name.endswith((".csproj", ".sln", ".fsproj")) for name in current_names):
+            root = current
+            break
         parent = os.path.dirname(current)
         if parent == current:
             break
@@ -152,6 +203,13 @@ def detect_project(cwd):
         if os.path.exists(os.path.join(root, name)):
             kinds.append(kind)
             marks.append(name)
+    try:
+        root_names = os.listdir(root)
+    except OSError:
+        root_names = []
+    if any(name.endswith((".csproj", ".sln", ".fsproj")) for name in root_names):
+        kinds.append("dotnet")
+        marks.append("*.csproj")
     if not kinds and os.path.isdir(os.path.join(root, ".git")):
         kinds = ["git"]
     kind = next((item for item in KIND_ORDER if item in kinds), kinds[0] if kinds else None)
@@ -213,6 +271,8 @@ def build_env(cwd, user=None, host=None, overrides=None) -> EnvInfo:
     env.is_root = _is_root()
     env.container = is_container()
     env.ssh = is_ssh()
+    env.wsl = is_wsl()
+    env.pkg_manager = detect_pkg_manager()
     env.shell = os.path.basename(os.environ.get("SHELL") or os.environ.get("ComSpec") or "") or None
     env.distro = detect_distro()
     project = detect_project(env.cwd)
