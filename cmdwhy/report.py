@@ -396,6 +396,16 @@ class Renderer:
                 lines.append("    " + p("✗ 用户标记：这条不是修复", "yellow"))
                 shown += 1
                 continue
+            confidence = 0.55
+            if ann.steps or source.steps:
+                confidence += 0.1
+            if ann.verified or source.verified:
+                confidence += 0.25
+            if source.error is not None and source.error.confidence == "high":
+                confidence += 0.05
+            confidence = min(0.95, confidence)
+            label = "高" if confidence >= 0.8 else ("中" if confidence >= 0.6 else "低")
+            lines.append("    置信度  %s（%.0f%%）" % (label, confidence * 100))
             for step in ann.steps or source.steps:
                 lines.append("    └─ " + p(truncate(step, 80), "bold"))
             if ann.verified_at:
