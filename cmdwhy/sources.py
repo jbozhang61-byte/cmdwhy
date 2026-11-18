@@ -337,8 +337,8 @@ def load_events(cfg, extra_paths=None, use_store=True):
             else:
                 parsed, fmt = parse_file(path)
                 cache.put(cfg, path, fmt, parsed, cfg.redact)
-        except OSError as exc:
-            warnings.append("无法读取 %s：%s" % (path, exc))
+        except Exception as exc:
+            warnings.append("无法读取/解析 %s：%s" % (path, exc))
             continue
         events.extend(parsed)
         files.append(path)

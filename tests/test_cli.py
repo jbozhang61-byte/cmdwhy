@@ -368,6 +368,25 @@ class CliTest(unittest.TestCase):
         cleared = json.loads(self.run_cli("index", "status", "--json", expect=0).stdout)
         self.assertEqual(cleared["events"], 0)
 
+
+    def test_label_correction(self):
+        self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
+        proc = self.run_cli(
+            "label", "518",
+            "--task", "部署 API",
+            "--purpose", "发布新版本并确认回滚点",
+            expect=0,
+        )
+        self.assertIn("已标注", proc.stdout)
+        text = self.run_cli("explain", "518", expect=0).stdout
+        self.assertIn("部署 API", text)
+        self.assertIn("发布新版本并确认回滚点", text)
+        listed = self.run_cli("label", "--list", expect=0).stdout
+        self.assertIn("部署 API", listed)
+        self.run_cli("label", "518", "--clear", expect=0)
+        after = self.run_cli("explain", "518", expect=0).stdout
+        self.assertNotIn("部署 API", after)
+
     def test_repair_correction(self):
         self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
         before = self.run_cli("explain", "#18", expect=0).stdout
@@ -559,7 +578,7 @@ class CliTest(unittest.TestCase):
 
     def test_version(self):
         proc = self.run_cli("version", expect=0)
-        self.assertIn("cmdwhy 0.4.0", proc.stdout)
+        self.assertIn("cmdwhy 0.5.0", proc.stdout)
 
     def test_analyze_demo_file(self):
         proc = self.run_cli("analyze", "examples/demo_history.jsonl", "-n", "4", expect=0)

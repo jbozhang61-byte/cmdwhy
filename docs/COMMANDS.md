@@ -1,6 +1,6 @@
 # cmdwhy 命令参考
 
-版本：0.4.0（`cmdwhy version` 可查看当前安装版本）
+版本：0.5.0（`cmdwhy version` 可查看当前安装版本）
 
 所有命令都支持全局参数，位置随意：
 
@@ -55,6 +55,7 @@ cmdwhy --no-color timeline   # 适合重定向到文件
 | `fix` | 输入纠错 | 命令打错、找不到命令 |
 | `diagnose` | 同类错误检索 | 又遇到熟悉的报错 |
 | `repair` | 修复链因果图与人工纠正 | 这条不是修复 |
+| `label` | 人工修正任务/目标/目的 | 启发式标签不准 |
 | `kb` | 错误知识库 | 查看/导出修法 |
 | `hook` | bash/zsh/fish hook | 让新命令带退出码 |
 | `run` | 包装执行 + 即时诊断 | 想拿到精确 stderr；`--shell` 支持管道 |
@@ -223,7 +224,7 @@ cmdwhy search git --json
     cmdwhy index rebuild
     cmdwhy index clear
 
-索引库是 `index.db`，保存事件、状态、任务、错误、项目字段，并用 FTS5 建全文索引。`ingest`/`search` 会自动更新；签名（来源 mtime/size + store + 配置）不一致时会重建。
+索引库是 `index.db`，保存事件、状态、任务、错误、项目字段，并用 FTS5 建全文索引。`ingest`/`search` 会自动更新；签名（来源 mtime/size + store + labels + 配置）不一致时会重建。损坏的 index.db/cache.db 会自动删除重建。
 
 
 ### cmdwhy summary
@@ -430,6 +431,14 @@ cmdwhy diagnose --text "..." --json
 
 图里的因果概率是 logistic 评分：综合时间距离、重跑相似度、修复动作、验证状态和错误置信度；人工 reject 直接置 0，accept 置 1。纠正按失败事件的稳定 ID 持久化到 repairs.json；之后 explain、报告和知识库学习都会尊重它。
 
+
+### cmdwhy label
+
+    cmdwhy label 518 --task '部署 API' --goal '发布新版本' --purpose '发布并确认回滚点'
+    cmdwhy label 518 --clear
+    cmdwhy label --list
+
+标注按稳定 ID 写入 labels.json；之后 explain、timeline、summary、search 优先使用人工标签。
 
 ### cmdwhy kb
 

@@ -52,13 +52,35 @@ def path(cfg):
 
 def _connect(cfg):
     os.makedirs(cfg.home, exist_ok=True)
-    con = sqlite3.connect(path(cfg), timeout=3)
-    con.executescript(SCHEMA)
     try:
-        con.executescript(FTS_SCHEMA)
-    except sqlite3.OperationalError:
+        con = sqlite3.connect(path(cfg), timeout=3)
+        con.executescript(SCHEMA)
+        try:
+            con.executescript(FTS_SCHEMA)
+        except sqlite3.OperationalError:
+            pass
+        return con
+    except sqlite3.DatabaseError:
+        try:
+            con.close()
+        except Exception:
+            pass
+        _reset(cfg)
+        con = sqlite3.connect(path(cfg), timeout=3)
+        con.executescript(SCHEMA)
+        try:
+            con.executescript(FTS_SCHEMA)
+        except sqlite3.OperationalError:
+            pass
+        return con
+
+
+def _reset(cfg):
+    try:
+        if os.path.exists(path(cfg)):
+            os.remove(path(cfg))
+    except OSError:
         pass
-    return con
 
 
 def _fts_ready(con):
@@ -83,6 +105,11 @@ def signature(cfg, rich=False):
         digest.update(("store:%s:%s" % (stat.st_mtime_ns, stat.st_size)).encode())
     except OSError:
         digest.update(b"store:missing")
+    try:
+        stat = os.stat(cfg.labels_path)
+        digest.update(("labels:%s:%s" % (stat.st_mtime_ns, stat.st_size)).encode())
+    except OSError:
+        digest.update(b"labels:missing")
     digest.update(("%s:%s:%s:%s" % (cfg.redact, cfg.max_events, cfg.context_window, 1 if rich else 0)).encode())
     return digest.hexdigest()
 
@@ -96,6 +123,9 @@ def is_current(cfg):
         finally:
             con.close()
         return bool(row and row[0] == signature(cfg, True) and count >= 0)
+    except sqlite3.DatabaseError:
+        _reset(cfg)
+        return False
     except (OSError, sqlite3.Error):
         return False
 
@@ -158,6 +188,8 @@ def update(cfg, analysis, rich=True):
             con.commit()
         finally:
             con.close()
+    except sqlite3.DatabaseError:
+        _reset(cfg)
     except (OSError, sqlite3.Error, TypeError):
         return
 
@@ -245,6 +277,9 @@ def query(cfg, query_text="", status=None, error=None, since_ts=None, until_ts=N
             rows = rows[:limit]
         results = [_row_to_result(row, -row[-1] if fts and sort == "relevance" else 0.0) for row in rows]
         return results, total
+    except sqlite3.DatabaseError:
+        _reset(cfg)
+        return None, 0
     except (OSError, sqlite3.Error):
         return None, 0
 
@@ -263,6 +298,9 @@ def status(cfg):
             "current": bool(current and current[0] == signature(cfg, True)),
             "size": os.path.getsize(path(cfg)) if os.path.exists(path(cfg)) else 0,
         }
+    except sqlite3.DatabaseError:
+        _reset(cfg)
+        return {"path": path(cfg), "events": 0, "current": False, "size": 0}
     except (OSError, sqlite3.Error):
         return {"path": path(cfg), "events": 0, "current": False, "size": 0}
 
@@ -278,5 +316,7 @@ def clear(cfg):
             con.commit()
         finally:
             con.close()
+    except sqlite3.DatabaseError:
+        _reset(cfg)
     except (OSError, sqlite3.Error):
         pass

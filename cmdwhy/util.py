@@ -237,8 +237,18 @@ def atomic_write(path: str, text: str):
 
 def append_line(path: str, line: str):
     ensure_dir(os.path.dirname(os.path.abspath(path)))
-    with open(path, "a", encoding="utf-8", newline="\n") as fh:
-        fh.write(line.rstrip("\n") + "\n")
+    data = (line.rstrip("\n") + "\n").encode("utf-8")
+    flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    fd = os.open(path, flags, 0o600)
+    try:
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            view = view[written:]
+    finally:
+        os.close(fd)
 
 
 def read_json(path, default=None):

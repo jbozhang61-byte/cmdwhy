@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from . import causal
 from . import errors as err_mod
+from . import labels
 from . import repairs
 from .config import Config
 from .context import attach_contexts
@@ -632,4 +633,8 @@ def analyze(events, cfg=None, meta=None, with_context=True) -> Analysis:
     result.stats = compute_stats(events, annotations, chains, sessions)
     if with_context:
         attach_contexts(result, getattr(cfg, "context_window", 20))
+    try:
+        labels.apply(result, cfg)
+    except (OSError, ValueError):
+        pass
     return result

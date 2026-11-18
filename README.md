@@ -397,6 +397,7 @@ cmdwhy history --grep status
 | `cmdwhy fix --last` | 检查上一条失败命令的输入 |
 | `cmdwhy diagnose` / `--text "错误输出"` | 检索同类错误，给出你以前的修法和通用建议 |
 | `cmdwhy repair graph / reject / accept` | 查看因果图，纠正“这条不是修复” |
+| `cmdwhy label 518 --task ... --purpose ...` | 人工修正任务/目标/目的 |
 | `cmdwhy kb` / `--signature PERM:dpkg-lock` / `--export` | 查看、检索、导出错误知识库 |
 | `cmdwhy hook install [--shell fish]` | 管理 bash / zsh / fish hook |
 | `cmdwhy run [--shell] -- 命令` | 包装执行，捕获 stderr 并即时诊断；--shell 支持管道/重定向 |
@@ -567,6 +568,16 @@ bash / zsh / fish 历史          hook 记录（退出码、cwd、stderr、发�
 
 纠正按失败事件的稳定 ID 持久化到 repairs.json；之后 explain、报告、知识库学习都会尊重它。
 
+## 人工修正任务 / 目的
+
+启发式标签也可能错。可以按稳定 ID 覆盖：
+
+    cmdwhy label 518 --task '部署 API' --goal '发布新版本' --purpose '发布并确认回滚点'
+    cmdwhy label 518 --clear
+    cmdwhy label --list
+
+标注写入 labels.json；之后 explain、timeline、summary、search 都优先使用人工标签。
+
 ## 错误知识库：下次别再踩同一个坑
 
 每次 `ingest` 都会把“这个错误签名 → 当时真正让它变好的命令”沉淀到 `knowledge.json`。下次遇到同签名错误：
@@ -617,6 +628,8 @@ $ cmdwhy fix "gti status"
 - **落盘前脱敏**：命令里的 `--password=`、`--token=`、`export *SECRET=`、URL 里的账号密码、GitHub token、AWS key、SSH 公钥、40 位以上混合 token 会被替换成 `***`，hook 记录在写入 events.jsonl 之前就会处理。
 - **存储位置**：`$CMDWHY_HOME`，默认 `~/.local/share/cmdwhy`；文件是 `events.jsonl`（追加写）、`knowledge.json`、`config.json`、`repairs.json`、`cache.db`（解析缓存）、`index.db`（FTS5 查询索引）。
 - **解析缓存**：历史文件按 mtime/size + redact 配置缓存到 `cache.db`，缓存内容已脱敏；文件改动会自动失效，删掉 `cache.db` 也安全。
+- **损坏自恢复**：cache.db / index.db 损坏会自动删除重建；无法读取的历史文件会跳过并告警，不会中断其他来源。
+- **并发追加**：events.jsonl 用单次 O_APPEND 写入，降低多 shell 同时记录时的交错风险。
 - **危险命令不自动执行**：`cw run --yes` 只执行通过安全检查的修正命令；含 `<包名>` 这种占位符、或命中危险规则的建议一律拒绝。
 - **可卸载**：`cmdwhy hook uninstall` 移除 rc 里的配置；删掉数据目录即可清除全部记录。
 
@@ -670,7 +683,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-WSL2 上 **199 个测试全部通过**；VMware 0.4.0 上 **199 个测试通过**（15.7s）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
+WSL2 上 **204 个测试全部通过**；VMware 0.4.0 上最近一次 **199 个测试通过**（15.7s；标签/稳定性新增的 5 个测试还没在 VM 重跑）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 真实历史方面：当前机器能找到的真实用户历史是 **494 条**（Windows Git Bash 94 + PowerShell 401 + VM 12），没有可用的 1000+ 条用户历史，所以没有伪造。另用 1600 条**真实执行事件**（实际运行命令并记录退出码/cwd）做了规模压测：WSL 2 秒、VM 1 秒，27 个会话、53 次失败、4 条修复链，SQLite 索引 1600 条。
@@ -682,7 +695,7 @@ WSL2 上 **199 个测试全部通过**；VMware 0.4.0 上 **199 个测试通过*
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 199 个测试
+python3 -m unittest discover -s tests -v   # 204 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -723,7 +736,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             199 个单元 + 端到端 CLI 测试
+├── tests/             204 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

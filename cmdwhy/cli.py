@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from . import __version__
 from . import errors as err_mod
 from . import index_db as event_index
+from . import labels
 from . import repairs
 from . import system as linux_system
 from .analyze import analyze
@@ -205,6 +206,15 @@ def build_parser():
     p.add_argument("target", nargs="?", help="修复动作的编号（history/#/e 稳定 ID）")
     p.set_defaults(func=cmd_repair)
 
+    p = sub.add_parser("label", help="人工修正任务/目标/目的标签")
+    p.add_argument("target", nargs="?", help="命令编号（history/#/e 稳定 ID）")
+    p.add_argument("--task", help="覆盖任务标签")
+    p.add_argument("--goal", help="覆盖目标")
+    p.add_argument("--purpose", help="覆盖目的")
+    p.add_argument("--clear", action="store_true", help="删除该命令的人工标注")
+    p.add_argument("--list", action="store_true", help="列出所有人工标注")
+    p.set_defaults(func=cmd_label)
+
     p = sub.add_parser("diagnose", help="检索同类错误：以前怎么修好的、这次该怎么改")
     p.add_argument("--last", action="store_true", help="诊断最近一次失败")
     p.add_argument("--text", help="直接给一段错误输出")
@@ -331,6 +341,7 @@ HELP_DESCRIPTIONS = {
     "fix": "检查命令输入：在 PATH、合法子命令和你成功用过的历史里找最像的命令，给出可直接执行的修正。",
     "diagnose": "检索同类错误：按错误签名或原文相似度，给出你以前验证有效的修法，以及 Ubuntu 通用处置建议。",
     "repair": "查看修复链因果图，并把“这条不是修复”持久化；之后 explain/诊断会尊重你的纠正。",
+    "label": "人工修正某条命令的任务/目标/目的标签；按稳定 ID 持久化，让启发式结果可被覆盖。",
     "kb": "查看、检索、导出或清空本地错误知识库（错误签名 -> 修复步骤）。",
     "hook": "安装/卸载/查看 bash、zsh、fish hook。hook 会把退出码、cwd、发行版写入事件文件，让之后的注解置信度更高。",
     "record": "内部命令：由 shell hook 调用，记录单条命令。一般不需要手动执行。",
@@ -361,6 +372,7 @@ HELP_EXAMPLES = {
     "fix": "  cmdwhy fix 'git stauts'\n  cmdwhy fix 'gti status'\n  cmdwhy fix --last",
     "diagnose": "  cmdwhy diagnose\n  cmdwhy diagnose --text 'error: externally-managed-environment'\n  cmdwhy diagnose --signature PERM:dpkg-lock --fix",
     "repair": "  cmdwhy repair graph\n  cmdwhy repair reject '#19'\n  cmdwhy repair accept '#19'",
+    "label": "  cmdwhy label 518 --task '部署 API' --purpose '发布新版本'\n  cmdwhy label 518 --clear\n  cmdwhy label --list",
     "kb": "  cmdwhy kb\n  cmdwhy kb --signature PORT:3000\n  cmdwhy kb --learn\n  cmdwhy kb --export kb.json",
     "hook": "  cmdwhy hook install\n  cmdwhy hook status\n  cmdwhy hook install --print --shell bash",
     "run": "  cmdwhy run -- npm run dev\n  cmdwhy run --fix -- python3 app.py\n  cw run --fix --yes -- git stauts",
@@ -554,6 +566,10 @@ def cmd_explain(args, cfg, renderer):
     seqs, notes = resolve_targets(analysis, args.target or ["last"])
     if seqs:
         attach_contexts(analysis, args.context or cfg.context_window, seqs=seqs)
+        try:
+            labels.apply(analysis, cfg)
+        except (OSError, ValueError):
+            pass
     if not seqs:
         print("没有找到要解释的命令。")
         for note in notes:
@@ -892,6 +908,53 @@ def _last_failure(analysis):
     return None
 
 
+def cmd_label(args, cfg, renderer):
+    data = labels.load(cfg)
+    if args.list:
+        entries = data.get("labels") or {}
+        analysis, meta = _analysis(cfg)
+        by_uid = {event.uid: event for event in analysis.events}
+        lines = [renderer.p.bold("人工标注")]
+        if not entries:
+            lines.append("  还没有标注。用 cmdwhy label 518 --task '...' 添加。")
+        for uid, entry in entries.items():
+            event = by_uid.get(uid)
+            label = renderer._ref(analysis, event.seq) if event is not None else uid
+            lines.append("  %s  %s" % (label, event.cmd if event is not None else ""))
+            for key in ("task", "goal", "purpose"):
+                if entry.get(key):
+                    lines.append("      %s: %s" % (key, entry[key]))
+        print("\n".join(lines))
+        return 0
+    if not args.target:
+        print("用法：cmdwhy label 518 --task '...' --goal '...' --purpose '...'", file=sys.stderr)
+        return 2
+    analysis, meta = _analysis(cfg)
+    seqs, notes = resolve_targets(analysis, [args.target])
+    if not seqs:
+        print("没有找到目标。")
+        for note in notes:
+            print("  " + note)
+        return 2
+    event = analysis.event(seqs[0])
+    if args.clear:
+        labels.clear(cfg, event.uid)
+        print("已删除 %s 的人工标注。" % renderer._ref(analysis, event.seq))
+        return 0
+    if not (args.task or args.goal or args.purpose):
+        print(renderer.render_explain(analysis, [event.seq]))
+        return 0
+    entry = labels.set_label(cfg, event.uid, task=args.task, goal=args.goal, purpose=args.purpose)
+    if args.json:
+        _print_json({"uid": event.uid, "seq": event.seq, "entry": entry})
+    else:
+        print("已标注 %s：%s" % (renderer._ref(analysis, event.seq), event.cmd))
+        for key in ("task", "goal", "purpose"):
+            if entry.get(key):
+                print("  %s: %s" % (key, entry[key]))
+    return 0
+
+
 def cmd_repair(args, cfg, renderer):
     analysis, meta = _analysis(cfg)
     data = repairs.load(cfg)
@@ -1225,6 +1288,13 @@ def cmd_doctor(args, cfg, renderer):
     lines.append("  Python      %s（需要 3.8+）" % sys.version.split()[0])
     lines.append("  系统        %s（%s / %s）" % (distro.name, distro.family, distro.pkg_manager))
     lines.append("  数据目录    %s" % cfg.home)
+    cache_size = os.path.getsize(cfg.cache_path) if os.path.exists(cfg.cache_path) else 0
+    index_info = event_index.status(cfg)
+    lines.append("  解析缓存    %s" % (("%.1f KB" % (cache_size / 1024.0)) if cache_size else "未建立"))
+    lines.append(
+        "  查询索引    %d 条 / %s"
+        % (index_info["events"], "最新" if index_info["current"] else "需要 cmdwhy index rebuild")
+    )
     writable = os.access(cfg.home, os.W_OK)
     lines.append("  可写        %s" % ("是" if writable else p("否——请检查权限", "red")))
     if os.path.exists(cfg.store_path):

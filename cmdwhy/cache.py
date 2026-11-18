@@ -28,8 +28,30 @@ def enabled():
 
 def _connect(path):
     con = sqlite3.connect(path, timeout=2)
-    con.execute(SCHEMA)
-    return con
+    try:
+        con.execute(SCHEMA)
+        return con
+    except sqlite3.DatabaseError:
+        try:
+            con.close()
+        except Exception:
+            pass
+        _reset(path)
+        con = sqlite3.connect(path, timeout=2)
+        con.execute(SCHEMA)
+        return con
+
+
+def _reset(path):
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def clear(cfg):
+    _reset(cfg.cache_path)
 
 
 def get(cfg, path, redact):
@@ -50,6 +72,9 @@ def get(cfg, path, redact):
         fmt, payload = row
         items = json.loads(payload)
         return [Event.from_dict(item) for item in items], fmt
+    except sqlite3.DatabaseError:
+        _reset(cfg.cache_path)
+        return None
     except (OSError, sqlite3.Error, ValueError):
         return None
 
@@ -83,5 +108,7 @@ def put(cfg, path, fmt, events, redact):
             con.commit()
         finally:
             con.close()
+    except sqlite3.DatabaseError:
+        _reset(cfg.cache_path)
     except (OSError, sqlite3.Error, TypeError, ValueError):
         return
