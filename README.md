@@ -735,6 +735,7 @@ cmdwhy/
 │   ├── resolve.py     history 编号 / 分析序号 / 稳定 ID 解析
 │   ├── guide.py       命令地图与 bash/zsh 补全脚本
 │   └── util.py        时间/路径/距离/颜色等工具
+├── CONTRIBUTING.md    贡献指南
 ├── docs/USAGE.md      完整使用手册（安装、工作流、排障、自动化）
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
@@ -762,6 +763,14 @@ hook 在每次提示符前把一条 JSON 追加到文件，命令在后台执行
 **怎么彻底删除？**
 `cmdwhy hook uninstall`，然后删除 `~/.local/share/cmdwhy` 以及 rc 文件里残留的 `# >>> cmdwhy >>>` 块。
 
+## 参与贡献
+
+这是一个公开仓库，欢迎提交 issue 和 PR。
+
+- 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 完整使用手册：[docs/USAGE.md](docs/USAGE.md)
+- 命令参考：[docs/COMMANDS.md](docs/COMMANDS.md)
+- 许可证：[MIT](LICENSE)
 ## License
 
 MIT
