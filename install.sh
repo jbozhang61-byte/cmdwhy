@@ -18,7 +18,8 @@ install_packages() {
         $SUDO apt-get update -qq
         $SUDO apt-get install -y python3 python3-venv python3-pip git
     elif command -v pacman >/dev/null 2>&1; then
-        $SUDO pacman -Sy --needed --noconfirm python python-pip git
+        $SUDO pacman -Syu --noconfirm
+        $SUDO pacman -S --needed --noconfirm python python-pip git
     elif command -v dnf >/dev/null 2>&1; then
         $SUDO dnf install -y python3 python3-pip git
     elif command -v yum >/dev/null 2>&1; then

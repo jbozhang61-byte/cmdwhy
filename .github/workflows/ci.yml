@@ -80,7 +80,8 @@ jobs:
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update && apt-get install -y python3 python3-pip python3-venv git bash
           elif command -v pacman >/dev/null 2>&1; then
-            pacman -Sy --noconfirm --needed python python-pip git bash
+            pacman -Syu --noconfirm
+            pacman -S --needed --noconfirm python python-pip git bash
           elif command -v dnf >/dev/null 2>&1; then
             dnf install -y python3 python3-pip git bash
           elif command -v yum >/dev/null 2>&1; then
