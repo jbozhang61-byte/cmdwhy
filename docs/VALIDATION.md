@@ -105,7 +105,7 @@ GitHub Actions 的 distro 任务在容器里跑了完整测试：
 - Ubuntu 桌面图形终端里的真实交互（本次通过 script 伪终端验证 bash + hook）；
 - 用户本人的上千条真实历史：当前只找到 494 条真实历史，没有伪造；另用 1600 条真实执行事件做了规模压测；
 - 多人共用机器；
-- Ubuntu 20.04 兼容性回归；22.04/24.04、Debian 12、Arch、Fedora、AlmaLinux 9、Alpine 已由 GitHub Actions（run 44303764093）覆盖并通过。
+- Ubuntu 20.04 兼容性回归；22.04/24.04、Debian 12、Arch、Fedora、AlmaLinux 9、Alpine 已由 GitHub Actions（run 44308797558）覆盖并通过。
 
 ## 复现方式
 
