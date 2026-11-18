@@ -642,7 +642,7 @@ WSL2 上 **183 个测试全部通过**；VMware 上一次记录是 **167 个**�
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 
-仍未覆盖：VMware 上的 0.3.0 回归、Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04/22.04 回归。CI 矩阵已写入但还没在 GitHub 上实际跑过。
+仍未覆盖：VMware 上的 0.3.0 回归、Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04 回归。GitHub Actions 已实际跑过（Ubuntu 22.04/24.04 × Python 3.8–3.12 + shellcheck，全部通过）。
 
 
 ## 开发与测试
