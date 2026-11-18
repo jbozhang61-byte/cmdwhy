@@ -36,6 +36,11 @@ class AnalyzeDemoTest(unittest.TestCase):
         self.assertIn("python3 -m venv .venv", " ".join(ann.steps))
         self.assertNotIn("pip install -r requirements.txt", ann.steps)
 
+    def test_repair_probability(self):
+        self.assertGreater(self.ann(18).repair_probability, 0.7)
+        self.assertGreater(self.ann(45).repair_probability, 0.0)
+        self.assertLessEqual(self.ann(45).repair_probability, 1.0)
+
     def test_pip668(self):
         ann = self.ann(4)
         self.assertEqual(ann.error.signature, "PIP668")

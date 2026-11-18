@@ -347,6 +347,7 @@ class Annotation:
     steps: list = field(default_factory=list)
     verified: bool = False
     verified_at: int = None
+    repair_probability: float = 0.0
     correction: dict = None
     novelty: str = None
     task: str = None
@@ -378,6 +379,7 @@ class Annotation:
             "steps": list(self.steps),
             "verified": self.verified,
             "verified_at": self.verified_at,
+            "repair_probability": self.repair_probability,
             "novelty": self.novelty,
             "task": self.task,
             "task_goal": self.task_goal,

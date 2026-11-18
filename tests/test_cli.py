@@ -351,6 +351,17 @@ class CliTest(unittest.TestCase):
         self.assertIn("正则表达式无效", bad.stderr)
 
 
+
+    def test_index_status_and_clear(self):
+        self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
+        info = json.loads(self.run_cli("index", "status", "--json", expect=0).stdout)
+        self.assertTrue(info["current"])
+        self.assertEqual(info["events"], 62)
+        self.run_cli("search", "flask", expect=0)
+        self.run_cli("index", "clear", expect=0)
+        cleared = json.loads(self.run_cli("index", "status", "--json", expect=0).stdout)
+        self.assertEqual(cleared["events"], 0)
+
     def test_repair_correction(self):
         self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
         before = self.run_cli("explain", "#18", expect=0).stdout
@@ -529,7 +540,7 @@ class CliTest(unittest.TestCase):
 
     def test_version(self):
         proc = self.run_cli("version", expect=0)
-        self.assertIn("cmdwhy 0.3.0", proc.stdout)
+        self.assertIn("cmdwhy 0.4.0", proc.stdout)
 
     def test_analyze_demo_file(self):
         proc = self.run_cli("analyze", "examples/demo_history.jsonl", "-n", "4", expect=0)

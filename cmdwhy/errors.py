@@ -11,10 +11,10 @@ RULES = (
     ("GIT_AUTH", re.compile(r"authentication failed for .*https|fatal: authentication|could not read username|http 401|invalid username or password", re.I)),
     ("SSH", re.compile(r"permission denied \(publickey|host key verification failed|connection closed by remote host|too many authentication failures", re.I)),
     ("K8S", re.compile(r"kubectl|unable to connect to the server|crashloopbackoff|containercreating|forbidden.*(?:pods|services|deployments)|no resources found", re.I)),
-    ("DB", re.compile(r"psql|mysql|mariadb|redis|mongodb|mongo|postgres|could not connect to server|too many connections|relation .* does not exist|access denied for user", re.I)),
-    ("TLS", re.compile(r"certificate verify failed|x509|ssl error|tls handshake|unknown ca|self[- ]signed certificate", re.I)),
-    ("READONLY", re.compile(r"read-only file system|readonly database|attempt to write a readonly database", re.I)),
-    ("TEST_FAIL", re.compile(r"assertionerror|tests? failed|failed tests?|test suite failed|npm err! test failed|pytest.*failed", re.I)),
+    ("DB", re.compile(r"psql|mysql|mariadb|redis|mongodb|mongo|postgres|could not connect to server|too many connections|relation .* does not exist|access denied for user|数据库|データベース|Datenbank|base de données|base de datos|база данных", re.I)),
+    ("TLS", re.compile(r"certificate verify failed|x509|ssl error|tls handshake|unknown ca|self[- ]signed certificate|证书验证失败|证书|証明書|Zertifikat|certificat|certificado|сертификат", re.I)),
+    ("READONLY", re.compile(r"read-only file system|readonly database|attempt to write a readonly database|只读文件系统|只读数据库", re.I)),
+    ("TEST_FAIL", re.compile(r"assertionerror|tests? failed|failed tests?|test suite failed|npm err! test failed|pytest.*failed|测试失败|断言失败|テスト失敗|Test fehlgeschlagen|Échec du test|Prueba fallida", re.I)),
     ("DEPENDENCY", re.compile(r"eresolve|peer dep|dependency conflict|cannot satisfy|conflicting dependencies|requires .* but", re.I)),
     ("YAML", re.compile(r"yaml\.scanner|mapping values are not allowed|expected <block end>|could not find expected ':'", re.I)),
     ("JSON_DECODE", re.compile(r"jsondecodeerror|json\.decoder|unexpected token .* in json|invalid json", re.I)),
@@ -33,23 +33,31 @@ RULES = (
     ),
     ("GIT_REJECT", re.compile(r"\[rejected\]|non-fast-forward|failed to push some refs|updates were rejected", re.I)),
     ("GIT_CONFLICT", re.compile(r"merge conflict|automatic merge failed|conflict \(content\)|needs merge", re.I)),
+    ("NOT_FOUND", re.compile(r"no such file or directory|file or directory not found|没有那个文件或目录|文件或目录不存在|找不到文件|そのようなファイルやディレクトリはありません|Datei oder Verzeichnis nicht gefunden|Aucun fichier ou dossier de ce type|No existe el archivo o el directorio|Нет такого файла или каталога", re.I)),
     (
         "CMD_NOT_FOUND",
         re.compile(
             r"command not found|: not found\b|is not a git command|unknown command|"
-            r"no such command|not installed\.|command not found:",
+            r"no such command|not installed\.|command not found:|"
+            r"命令未找到|未找到命令|找不到命令|不是内部或外部命令|"
+            r"コマンドが見つかりません|Befehl nicht gefunden|commande introuvable|"
+            r"orden no encontrada|comando no encontrado|команда не найдена",
             re.I,
         ),
     ),
     (
         "PORT",
-        re.compile(r"address already in use|eaddrinuse|port \d+ (?:is )?already|bind: address already in use", re.I),
+        re.compile(r"address already in use|eaddrinuse|port \d+ (?:is )?already|bind: address already in use|地址已在使用|端口.*占用|ポート.*使用中|Adresse bereits in Verwendung|port.*déjà utilisé|dirección ya está en uso", re.I),
     ),
     (
         "PERM",
         re.compile(
             r"permission denied|operation not permitted|eacces|access is denied|"
-            r"are you root|must be root|only root|requires root|superuser",
+            r"are you root|must be root|only root|requires root|superuser|"
+            r"权限不够|权限不足|权限被拒绝|拒绝访问|没有权限|"
+            r"許可がありません|権限がありません|アクセスが拒否されました|"
+            r"Zugriff verweigert|Keine Berechtigung|Permission non accordée|Permission refusée|"
+            r"Accès refusé|Permiso denegado|Acceso denegado|Отказано в доступе|Нет прав",
             re.I,
         ),
     ),
@@ -57,13 +65,15 @@ RULES = (
         "AUTH",
         re.compile(
             r"authentication failed|permission denied \(publickey|401 unauthorized|403 forbidden|"
-            r"invalid credentials|could not read username|access token|bad credentials",
+            r"invalid credentials|could not read username|access token|bad credentials|"
+            r"认证失败|令牌无效|凭证无效|認証に失敗|"
+            r"Authentifizierung fehlgeschlagen|Échec de l'authentification|Error de autenticación|Ошибка аутентификации",
             re.I,
         ),
     ),
     (
         "MODULE",
-        re.compile(r"modulenotfounderror|importerror|no module named|cannot find module|module not found|cannot import name", re.I),
+        re.compile(r"modulenotfounderror|importerror|no module named|cannot find module|module not found|cannot import name|模块未找到|没有名为|找不到模块|モジュールが見つかりません|Modul nicht gefunden|Module introuvable|No se encuentra el módulo", re.I),
     ),
     (
         "BUILD",
@@ -73,7 +83,7 @@ RULES = (
             re.I,
         ),
     ),
-    ("DISK", re.compile(r"no space left|disk quota exceeded|read-only file system|insufficient space|inode", re.I)),
+    ("DISK", re.compile(r"no space left|disk quota exceeded|read-only file system|insufficient space|inode|磁盘空间不足|设备上没有空间|ディスク容量が不足|Kein Speicherplatz|Aucun espace|No queda espacio|Нет места", re.I)),
     (
         "LOCK",
         re.compile(r"could not get lock|unable to acquire the dpkg frontend lock|dpkg frontend lock|database is locked|another process", re.I),
@@ -83,11 +93,14 @@ RULES = (
         re.compile(
             r"connection refused|network is unreachable|temporary failure in name resolution|"
             r"name or service not known|could not resolve host|connection timed out|timed out|"
-            r"connection reset by peer|ssl certificate problem|no route to host",
+            r"connection reset by peer|ssl certificate problem|no route to host|"
+            r"连接被拒绝|无法解析主机|名称解析暂时失败|连接超时|"
+            r"接続が拒否されました|Verbindung abgelehnt|Name oder Dienst nicht bekannt|"
+            r"connexion refusée|conexión rechazada|Соединение отклонено|Не удалось разрешить",
             re.I,
         ),
     ),
-    ("SYNTAX", re.compile(r"syntax error|unexpected token|invalid syntax|parse error|unexpected eof", re.I)),
+    ("SYNTAX", re.compile(r"syntax error|unexpected token|invalid syntax|parse error|unexpected eof|语法错误|意外的标记|構文エラー|Syntaxfehler|Erreur de syntaxe|Error de sintaxis", re.I)),
     ("KILLED", re.compile(r"\bkilled\b|out of memory|oom-kill|cannot allocate memory", re.I)),
     (
         "USAGE",
@@ -113,17 +126,22 @@ MISSING_WORD_PATTERNS = (
     re.compile(r"unknown command '([\w-]+)'", re.I),
     re.compile(r"the program '([\w.+-]+)' is currently not installed", re.I),
     re.compile(r"([\w.+-]+): not found", re.I),
+    re.compile(r"([\w.+-]+)[:：]\s*(?:命令未找到|未找到命令|找不到命令|コマンドが見つかりません|Befehl nicht gefunden|commande introuvable|orden no encontrada|comando no encontrado|команда не найдена)", re.I),
+    re.compile(r"'([^']+)'\s*不是内部或外部命令", re.I),
 )
 
 MODULE_PATTERNS = (
     re.compile(r"no module named '?([\w.]+)'?", re.I),
     re.compile(r"cannot find module '?([\w./@-]+)'?", re.I),
+    re.compile(r"没有名为\s*['\"]?([\w.]+)", re.I),
+    re.compile(r"モジュール\s*['\"]?([\w.]+)", re.I),
 )
 
 PATH_PATTERNS = (
     re.compile(r"'([^']+)': no such file or directory", re.I),
     re.compile(r"([/\w.~-]+): no such file or directory", re.I),
     re.compile(r"cannot (?:access|open|find) '?([^':\s]+)'?", re.I),
+    re.compile(r"['\"]?([^'\":：]+)['\"]?\s*[:：]?\s*(?:没有那个文件或目录|文件或目录不存在|そのようなファイルやディレクトリはありません|Datei oder Verzeichnis nicht gefunden|Aucun fichier ou dossier de ce type|No existe el archivo o el directorio|Нет такого файла или каталога)", re.I),
 )
 
 
@@ -279,7 +297,7 @@ def _detail_line(text):
             continue
         if not fallback:
             fallback = line
-        if re.search(r"error|denied|not found|failed|rejected|refused|cannot|exception|traceback|panic|fatal|conflict", line, re.I):
+        if re.search(r"error|denied|not found|failed|rejected|refused|cannot|exception|traceback|panic|fatal|conflict|错误|失败|拒绝|找不到|エラー|失敗|Fehler|erreur|error|fallo|Ошибка", line, re.I):
             chosen = line
     return truncate(first_line(chosen or fallback, 200), 170)
 

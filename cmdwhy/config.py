@@ -74,6 +74,10 @@ class Config:
         return os.path.join(self.home, "repairs.json")
 
     @property
+    def index_path(self) -> str:
+        return os.path.join(self.home, "index.db")
+
+    @property
     def knowledge_path(self) -> str:
         return os.path.join(self.home, "knowledge.json")
 

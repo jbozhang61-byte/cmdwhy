@@ -6,6 +6,7 @@ import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
+from . import causal
 from . import errors as err_mod
 from . import repairs
 from .config import Config
@@ -61,6 +62,7 @@ class Chain:
     steps: list = field(default_factory=list)
     verified: bool = False
     verify_seq: int = None
+    probability: float = 0.0
 
     def to_dict(self):
         return {
@@ -70,6 +72,7 @@ class Chain:
             "steps": [{"seq": seq, "cmd": cmd} for seq, cmd in self.steps],
             "verified": self.verified,
             "verify_seq": self.verify_seq,
+            "probability": self.probability,
         }
 
 
@@ -452,6 +455,7 @@ def build_annotations(events, errors, chains, index: CorpusIndex, envs):
         fail_ann.steps = [cmd for _seq, cmd in chain.steps]
         fail_ann.verified = chain.verified
         fail_ann.verified_at = chain.verify_seq
+        fail_ann.repair_probability = chain.probability
         if chain.steps:
             fail_ann.add("修复动作：" + " › ".join(cmd for _seq, cmd in chain.steps))
         else:
@@ -603,6 +607,7 @@ def analyze(events, cfg=None, meta=None, with_context=True) -> Analysis:
             continue
         chain = find_chain(events, position, errors, cfg.window)
         if chain:
+            chain.probability = causal.chain_probability(chain, events, errors)
             chains.append(chain)
     annotations = build_annotations(events, errors, chains, index, envs)
     stats = compute_stats(events, annotations, chains, sessions)

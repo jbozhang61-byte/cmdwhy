@@ -51,10 +51,12 @@ def apply(analysis, data):
             ann.steps = []
             ann.verified = False
             ann.verified_at = None
+            ann.repair_probability = 0.0
             ann.role = "other"
             ann.note = "用户标记：这不是修复"
             ann.add("用户已标记这条修复链不成立")
         elif event.uid in accepted and ann.fix_of:
+            ann.repair_probability = 1.0
             ann.confidence = "high"
             ann.add("用户确认这条修复链成立")
     return analysis

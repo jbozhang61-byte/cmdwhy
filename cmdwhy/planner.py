@@ -10,6 +10,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from . import system as linux_system
 from .env import detect_project, detect_venv, git_info
 from .model import command_tokens
 from .safety import is_dangerous
@@ -62,7 +63,7 @@ def _normalize_risk(command, risk):
     lower = " " + (command or "").lower() + " "
     if command.strip().startswith("sudo ") or " sudo " in lower:
         return "high"
-    if re.search(r"\b(apt|apt-get|dpkg|snap)\b.*\b(install|remove|purge|upgrade)\b", lower):
+    if re.search(r"\b(apt|apt-get|dpkg|snap|pacman|dnf|yum|zypper|apk)\b.*\b(install|remove|purge|upgrade|-S)\b", lower):
         return "high"
     if re.search(r"\bsystemctl\b.*\b(start|stop|restart|reload|enable|disable)\b", lower):
         return "high"
@@ -161,13 +162,23 @@ def build_plan(analysis, knowledge=None, cwd=None, limit=5, focus_seq=None):
         elif category == "CMD_NOT_FOUND":
             word = error.missing_word or last.head
             if word and not ann.correction:
-                add("command-not-found " + word, "查询缺失命令对应的 Ubuntu 包名", "inspect", "low", "medium")
-                add("apt search " + word, "在软件源里搜索同名包", "inspect", "low", "low")
+                distro = linux_system.detect()
+                provider = distro.file_provider_command(word)
+                if provider:
+                    add(provider, "查询缺失命令属于哪个包（%s）" % distro.name, "inspect", "low", "medium")
+                add(distro.search_command(word), "在 %s 的软件源里搜索包名" % distro.name, "inspect", "low", "low")
         elif category == "MODULE":
             module = error.module
             if module:
                 add("python3 -m pip install " + module, "安装缺失的 Python 模块 %s" % module, "fix", "medium")
         elif category == "PIP668":
+            distro = linux_system.detect()
+            add(
+                distro.install_command([distro.package("python3-venv")]),
+                "安装 venv 支持（%s/%s）" % (distro.name, distro.pkg_manager),
+                "setup",
+                "high",
+            )
             add("python3 -m venv .venv", "创建独立虚拟环境，绕过 PEP 668 对系统 Python 的保护", "setup", "medium")
             if _has_file(cwd, "requirements.txt"):
                 add(

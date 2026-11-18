@@ -12,12 +12,12 @@
 | bash | 5.2.21 | 5.2.21 |
 | git | 2.43.0 | 2.43.0 |
 | zsh / fish | zsh 5.9 / fish 3.7 | 未安装 |
-| 测试 | 183 passed | 167 passed（0.2.0） |
+| 测试 | 195 passed | 167 passed（0.2.0） |
 | 用时 | 46.0s | 10.2s |
 
 ## 验证过的功能
 
-- python3 -m unittest discover -s tests：183 个测试全部通过；
+- python3 -m unittest discover -s tests：195 个测试全部通过；
 - cmdwhy demo：时间线、任务上下文、history 编号显示正常；
 - cmdwhy fix "git stauts"：干净环境下判定为高可信度，建议 git status；
 - cmdwhy ingest + cmdwhy history --duplicates --all：重复的 git status 分别编号；
@@ -69,7 +69,7 @@ VMware 虚拟机里的 hook 交互式日志：
 
 ## 仍未覆盖
 
-- VMware 上的 0.3.0 回归（验证时虚拟机已关机，167 是 0.2.0 记录）；
+- VMware 上的 0.4.0 回归（验证时虚拟机已关机，167 是 0.2.0 记录）；
 - Ubuntu 桌面图形终端里的真实交互（本次通过 script 伪终端验证 bash + hook）；
 - 上千条真实历史、多人共用机器；
 - Ubuntu 20.04 兼容性回归；22.04/24.04 已由 GitHub Actions（Ubuntu 22.04/24.04 × Python 3.8–3.12 + shellcheck，run 44299704217）覆盖并通过。

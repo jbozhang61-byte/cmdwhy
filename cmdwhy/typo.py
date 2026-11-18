@@ -17,6 +17,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+from . import system as linux_system
 from .model import command_tokens, core_signature, split_command
 from .util import damerau, keyboard_near
 
@@ -498,18 +499,26 @@ def propose_fixes(cmd, index: CorpusIndex = None, error=None, limit=3):
                 )
             )
 
-    # 4) 找不到相近命令：提示"可能没安装"，而不是乱猜
+    # 4) 找不到相近命令：按当前发行版的包管理器提示，而不是写死 apt
     if not fixes and (category == "CMD_NOT_FOUND" or not is_known_command(head)):
+        word = missing or head
+        distro = linux_system.detect()
+        provider = distro.file_provider_command(word)
+        reasons = [
+            "没有找到足够相近的命令，%s 可能根本没装" % word,
+            "当前系统 %s，包管理器是 %s；包名不一定等于命令名，先搜索确认"
+            % (distro.name, distro.pkg_manager),
+        ]
+        if provider:
+            reasons.append("查文件归属：%s" % provider)
+        reasons.append("先搜索：%s" % distro.search_command(word))
         fixes.append(
             Fix(
-                command="sudo apt install <包名>",
+                command=distro.install_command([word]),
                 kind="install",
                 score=0.3,
                 confidence="low",
-                reasons=[
-                    "没有找到足够相近的命令，%s 可能根本没装" % (missing or head),
-                    "用 command-not-found %s 可以查到对应的 Ubuntu 包名" % (missing or head),
-                ],
+                reasons=reasons,
             )
         )
 

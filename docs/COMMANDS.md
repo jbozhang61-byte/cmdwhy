@@ -1,6 +1,6 @@
 # cmdwhy 命令参考
 
-版本：0.3.0（`cmdwhy version` 可查看当前安装版本）
+版本：0.4.0（`cmdwhy version` 可查看当前安装版本）
 
 所有命令都支持全局参数，位置随意：
 
@@ -37,7 +37,8 @@ cmdwhy --no-color timeline   # 适合重定向到文件
 | `changes` | 环境/状态变化 | 看安装了什么、切了什么分支 |
 | `additions` | 首次出现的新命令 | 回顾新工具 |
 | `history` | history 风格编号列表 | 重复命令要区分是哪一次 |
-| `search` | 搜索命令/错误/时间/项目，支持正则/OR/相关度 | 查找某类操作 |
+| `search` | 搜索命令/错误/时间/项目，支持正则/OR/BM25 | 查找某类操作 |
+| `index` | SQLite FTS5 查询索引 | 搜索加速/排障 |
 | `digest` | 随机回看会话 | 随机抽查自己的操作 |
 | `fix` | 输入纠错 | 命令打错、找不到命令 |
 | `diagnose` | 同类错误检索 | 又遇到熟悉的报错 |
@@ -86,7 +87,19 @@ cmdwhy init
 cmdwhy doctor
 ```
 
-检查：Python 版本、数据目录是否可写、事件条数、历史来源、hook 是否安装、Git、`command-not-found`、知识库规模、危险命令规则是否正常。
+检查：Python 版本、发行版/包管理器、数据目录是否可写、事件条数、历史来源、hook 是否安装、Git、包文件查询工具、知识库规模、危险命令规则是否正常。
+
+### 支持的发行版
+
+| 家族 | 发行版 | 包管理器 |
+| --- | --- | --- |
+| Debian | Ubuntu / Debian / Kali / Mint / Pop | apt |
+| Arch | Arch / Manjaro / EndeavourOS | pacman |
+| Fedora | Fedora / RHEL / CentOS / Rocky / Alma | dnf / yum |
+| SUSE | openSUSE Leap / Tumbleweed | zypper |
+| Alpine | Alpine | apk |
+
+从 `/etc/os-release` 识别家族；命令缺失、venv 安装、包搜索会生成对应包管理器的命令，不再写死 apt。
 
 ### cmdwhy guide / version
 
@@ -184,13 +197,22 @@ cmdwhy search git push --sort relevance
 cmdwhy search git --json
 `@
 
-- 默认多个关键词是 AND；--any 改为 OR；--regex 把查询当正则；--sort relevance 按相关度排序；
+- 默认多个关键词是 AND；--any 改为 OR；--regex 把查询当正则；--sort relevance 用 BM25；
+- 有索引时直接走 SQLite FTS5，未建索引、正则或中文查询回退到 Python BM25；
 - 匹配命令文本、意图、任务、目的、错误签名/原文、项目名、cwd；
 - `--status`：`ok` / `fail` / `unknown`（`fail` 包含疑似失败）；
 - `--error`：按错误签名或类别子串匹配，如 `PORT:3000`、`PERM`；
 - `--since/--until`：`7d`、`24h`、`30m`、`2w`、`today`、`yesterday`、`2026-11-17 [HH:MM]`；
 - `--limit 0` 显示全部，`--oldest` 按时间正序；
 - 无时间戳的旧历史在带时间过滤时排除。
+### cmdwhy index
+
+    cmdwhy index status
+    cmdwhy index rebuild
+    cmdwhy index clear
+
+索引库是 `index.db`，保存事件、状态、任务、错误、项目字段，并用 FTS5 建全文索引。`ingest`/`search` 会自动更新；签名（来源 mtime/size + store + 配置）不一致时会重建。
+
 
 ### cmdwhy summary
 
@@ -393,7 +415,7 @@ cmdwhy diagnose --text "..." --json
     cmdwhy repair accept '#19'    # 确认这条修复链成立
     cmdwhy repair list
 
-纠正按失败事件的稳定 ID 持久化到 repairs.json；之后 explain、报告和知识库学习都会尊重它。
+图里的因果概率是 logistic 评分：综合时间距离、重跑相似度、修复动作、验证状态和错误置信度；人工 reject 直接置 0，accept 置 1。纠正按失败事件的稳定 ID 持久化到 repairs.json；之后 explain、报告和知识库学习都会尊重它。
 
 
 ### cmdwhy kb

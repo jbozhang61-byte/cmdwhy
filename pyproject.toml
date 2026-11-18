@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cmdwhy"
-version = "0.3.0"
+version = "0.4.0"
 description = "让 shell 历史自己解释自己：工作环境、动机、报错与修复链，附输入错误自动纠正"
 readme = "README.md"
 requires-python = ">=3.8"

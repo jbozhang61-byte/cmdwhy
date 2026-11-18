@@ -17,6 +17,7 @@ COMMAND_NAMES = [
     "additions",
     "history",
     "search",
+    "index",
     "digest",
     "fix",
     "diagnose",
@@ -71,6 +72,7 @@ GROUPS = [
             ("cmdwhy history --duplicates", "只列出重复出现的命令"),
             ("cmdwhy search flask", "按关键词搜索命令、错误、任务"),
             ("cmdwhy search --error PORT --since 7d", "按错误和时间过滤"),
+            ("cmdwhy index status", "查看 SQLite/FTS5 查询索引"),
         ],
     ),
     (
@@ -217,6 +219,7 @@ def completion_zsh():
         "additions": "新增命令",
         "history": "编号命令列表",
         "search": "搜索历史",
+        "index": "SQLite 查询索引",
         "digest": "随机回看",
         "fix": "输入纠错",
         "diagnose": "错误诊断",

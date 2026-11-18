@@ -9,7 +9,7 @@
 - **错在哪、怎么好的**：退出码 + 错误原文 → 稳定错误签名 → 修复链 → 是否被重跑验证；
 - **以后怎么办**：同类错误自动检索你以前真正修好它的命令；打错字时自动给出更正建议。
 
-Ubuntu 优先，纯 Python 标准库，零第三方依赖，数据全部留在本机。
+Linux 优先：Debian/Ubuntu/Kali、Arch/Manjaro、Fedora/RHEL/CentOS/Rocky/Alma、openSUSE、Alpine 都能用；纯 Python 标准库，零第三方依赖，数据全部留在本机。
 
 ## 30 秒感受
 
@@ -161,7 +161,7 @@ cmdwhy search git push --sort relevance
 cmdwhy search git --json
 ```
 
-搜索范围包括命令文本、意图、任务、目的、错误签名/原文、项目名和 cwd。默认多个关键词是 AND；--any 改为 OR，--regex 把查询当正则，--sort relevance 按命中位置/字段权重排序。结果保留 history 编号与稳定 ID，可以直接：
+搜索范围包括命令文本、意图、任务、目的、错误签名/原文、项目名和 cwd。默认多个关键词是 AND；--any 改为 OR，--regex 把查询当正则，--sort relevance 用 BM25 排序。有索引时查询直接走 SQLite FTS5；未建索引、正则或中文查询回退到 Python BM25。结果保留 history 编号与稳定 ID，可以直接：
 
 ```text
 命令搜索  关键词：flask · 显示 1 / 共 62 条
@@ -224,18 +224,29 @@ cd cmdwhy
 python3 -m cmdwhy demo
 ```
 
-要求 Python 3.8+，无第三方依赖。Ubuntu 20.04 及以上自带的 Python 就够。
+要求 Python 3.8+，无第三方依赖。Debian/Ubuntu/Kali、Arch、Fedora/RHEL/CentOS、openSUSE、Alpine 的官方 Python 都够。
 
 ### 方式二：安装成 `cmdwhy` / `cw` 命令
 
 ```bash
-sudo apt install -y python3-venv git
 cd cmdwhy
-bash install.sh        # 建 .venv、安装 cmdwhy / cw 命令
+bash install.sh        # 自动识别 apt/pacman/dnf/zypper/apk，建 .venv
 . .venv/bin/activate
 cmdwhy --version
 ```
 
+
+### 支持的发行版
+
+| 发行版 | 包管理器 | 说明 |
+| --- | --- | --- |
+| Ubuntu / Debian / Kali / Mint / Pop | apt | 主要开发环境，hook 已在 Ubuntu 实测 |
+| Arch / Manjaro / EndeavourOS | pacman | 用 pacman 生成安装/搜索建议 |
+| Fedora / RHEL / CentOS / Rocky / Alma | dnf / yum | 用 dnf provides 查命令归属 |
+| openSUSE Leap / Tumbleweed | zypper | 用 zypper 搜索包 |
+| Alpine | apk | 官方 Python 即可，install.sh 会装 bash |
+
+命令缺失时不再写死 sudo apt install，而是按当前发行版生成 pacman/dnf/zypper/apk 命令；`cmdwhy doctor` 会显示检测到的发行版和包管理器。
 安装后会得到两个命令：
 
 - `cmdwhy`：分析、报告、诊断、纠错；
@@ -359,7 +370,8 @@ cmdwhy history --grep status
 | `cmdwhy changes` | 环境/状态变化：cd、安装、分支、服务、权限…… |
 | `cmdwhy additions` | 第一次出现的新命令 |
 | `cmdwhy history [--duplicates] [--grep 文本]` | 像 history 一样列出编号，重复命令分别编号 |
-| `cmdwhy search 关键词` / `--regex` / `--any` / `--sort relevance` | 搜索历史，支持正则、OR、相关度排序 |
+| `cmdwhy search 关键词` / `--regex` / `--any` / `--sort relevance` | 搜索历史；有索引时走 FTS5 + BM25 |
+| `cmdwhy index status/rebuild/clear` | 查看/重建 SQLite 查询索引 |
 | `cmdwhy digest --random 2` | 随机回看几个会话 |
 | `cmdwhy fix "git stauts"` | 输入纠错，给出可直接执行的正确命令 |
 | `cmdwhy fix --last` | 检查上一条失败命令的输入 |
@@ -583,7 +595,7 @@ $ cmdwhy fix "gti status"
 
 - **全部本地**：不联网、不上传、不调用外部 API。
 - **落盘前脱敏**：命令里的 `--password=`、`--token=`、`export *SECRET=`、URL 里的账号密码、GitHub token、AWS key、SSH 公钥、40 位以上混合 token 会被替换成 `***`，hook 记录在写入 events.jsonl 之前就会处理。
-- **存储位置**：`$CMDWHY_HOME`，默认 `~/.local/share/cmdwhy`；文件是 `events.jsonl`（追加写）、`knowledge.json`、`config.json`、`repairs.json`、`cache.db`（SQLite 解析缓存）。
+- **存储位置**：`$CMDWHY_HOME`，默认 `~/.local/share/cmdwhy`；文件是 `events.jsonl`（追加写）、`knowledge.json`、`config.json`、`repairs.json`、`cache.db`（解析缓存）、`index.db`（FTS5 查询索引）。
 - **解析缓存**：历史文件按 mtime/size + redact 配置缓存到 `cache.db`，缓存内容已脱敏；文件改动会自动失效，删掉 `cache.db` 也安全。
 - **危险命令不自动执行**：`cw run --yes` 只执行通过安全检查的修正命令；含 `<包名>` 这种占位符、或命中危险规则的建议一律拒绝。
 - **可卸载**：`cmdwhy hook uninstall` 移除 rc 里的配置；删掉数据目录即可清除全部记录。
@@ -638,17 +650,17 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-WSL2 上 **183 个测试全部通过**；VMware 上一次记录是 **167 个**，0.3.0 验证时虚拟机已关机，没有强行启动。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
+WSL2 上 **195 个测试全部通过**；VMware 上一次记录是 **167 个**，0.4.0 验证时虚拟机已关机，没有强行启动。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 
-仍未覆盖：VMware 上的 0.3.0 回归、Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04 回归。GitHub Actions 已实际跑过（Ubuntu 22.04/24.04 × Python 3.8–3.12 + shellcheck，全部通过）。
+仍未覆盖：VMware 上的 0.4.0 回归、Ubuntu 桌面图形终端、上千条真实历史、Ubuntu 20.04 回归。GitHub Actions 已实际跑过（Ubuntu 22.04/24.04 × Python 3.8–3.12 + shellcheck，全部通过）。
 
 
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 183 个测试
+python3 -m unittest discover -s tests -v   # 195 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -677,7 +689,9 @@ cmdwhy/
 │   ├── demo_data.py   内置演示数据
 │   ├── context.py     前后窗口任务推断与单条命令目的
 │   ├── planner.py     根据上下文和环境推断下一步（可自动执行）
-│   ├── search.py      关键词/正则/OR/相关度/错误/时间/项目搜索
+│   ├── search.py      关键词/正则/OR/BM25/错误/时间/项目搜索
+│   ├── index_db.py    SQLite + FTS5 查询索引
+│   ├── causal.py      修复链 logistic 因果概率
 │   ├── cache.py       SQLite 解析缓存（脱敏、按 mtime/size 失效）
 │   ├── repairs.py     修复链人工确认/否定
 │   ├── resolve.py     history 编号 / 分析序号 / 稳定 ID 解析
@@ -686,7 +700,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             183 个单元 + 端到端 CLI 测试
+├── tests/             195 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

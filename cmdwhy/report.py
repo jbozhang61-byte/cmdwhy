@@ -6,6 +6,7 @@ import os
 import random
 from collections import Counter, defaultdict
 
+from .causal import label as probability_label
 from .hints import hint_for
 from .intent import classify_intent
 from .model import CONFIDENCE_LABELS, STATUS_FAIL, STATUS_OK, STATUS_SUSPECT, STATUS_UNKNOWN
@@ -396,16 +397,19 @@ class Renderer:
                 lines.append("    " + p("✗ 用户标记：这条不是修复", "yellow"))
                 shown += 1
                 continue
-            confidence = 0.55
-            if ann.steps or source.steps:
-                confidence += 0.1
-            if ann.verified or source.verified:
-                confidence += 0.25
-            if source.error is not None and source.error.confidence == "high":
-                confidence += 0.05
-            confidence = min(0.95, confidence)
-            label = "高" if confidence >= 0.8 else ("中" if confidence >= 0.6 else "低")
-            lines.append("    置信度  %s（%.0f%%）" % (label, confidence * 100))
+            probability = ann.repair_probability
+            if not probability:
+                probability = 0.55
+                if ann.steps or source.steps:
+                    probability += 0.1
+                if ann.verified or source.verified:
+                    probability += 0.25
+                if source.error is not None and source.error.confidence == "high":
+                    probability += 0.05
+                probability = min(0.95, probability)
+            lines.append(
+                "    因果概率  %s（%.0f%%）" % (probability_label(probability), probability * 100)
+            )
             for step in ann.steps or source.steps:
                 lines.append("    └─ " + p(truncate(step, 80), "bold"))
             if ann.verified_at:
@@ -560,6 +564,11 @@ class Renderer:
                 lines.append("目的    " + ann.purpose)
             if ann.note:
                 lines.append("纠正    " + self.p(ann.note, "yellow"))
+            if ann.repair_probability:
+                lines.append(
+                    "修复概率  %s（%.0f%%）"
+                    % (probability_label(ann.repair_probability), ann.repair_probability * 100)
+                )
             if ann.error is not None:
                 prefix = "推测" if ann.error.inferred else "报错"
                 lines.append("错误    " + self.p(ann.error.signature, "bold") + "  " + ann.error.detail)

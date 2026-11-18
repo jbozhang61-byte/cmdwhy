@@ -76,6 +76,27 @@ class ErrorsTest(unittest.TestCase):
         pod = classify_text("Warning  BackOff  pod is in CrashLoopBackOff")
         self.assertEqual(pod.category, "K8S")
 
+
+    def test_multilingual_errors(self):
+        cases = [
+            ("bash: foo: 命令未找到", "CMD_NOT_FOUND"),
+            ("ls: 无法访问 'x': 没有那个文件或目录", "NOT_FOUND"),
+            ("cp: 权限不够", "PERM"),
+            ("bash: foo: コマンドが見つかりません", "CMD_NOT_FOUND"),
+            ("Verbindung abgelehnt", "NET"),
+            ("Permission non accordée", "PERM"),
+            ("Module introuvable: requests", "MODULE"),
+            ("Нет места на диске", "DISK"),
+        ]
+        for text, category in cases:
+            info = classify_text(text)
+            self.assertEqual(info.category, category, text)
+
+    def test_multilingual_missing_word(self):
+        info = classify_text("bash: foo: 命令未找到")
+        self.assertEqual(info.missing_word, "foo")
+        self.assertEqual(info.signature, "CMD_NOT_FOUND:foo")
+
     def test_normalize_stable(self):
         a = normalize_error_text("FileNotFoundError: /home/a/x.py line 42 at 12:30:01")
         b = normalize_error_text("FileNotFoundError: /home/b/y.py line 7 at 09:11:55")

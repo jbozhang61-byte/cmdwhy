@@ -11,7 +11,9 @@ from datetime import datetime, timedelta
 
 from . import __version__
 from . import errors as err_mod
+from . import index_db as event_index
 from . import repairs
+from . import system as linux_system
 from .analyze import analyze
 from .config import Config, config_for, default_home
 from .context import attach_contexts
@@ -182,6 +184,10 @@ def build_parser():
     p.add_argument("--sort", choices=["time", "relevance"], default="time", help="排序：时间或相关度")
     p.set_defaults(func=cmd_search)
 
+    p = sub.add_parser("index", help="查看/重建 SQLite 查询索引（FTS5/BM25）")
+    p.add_argument("action", nargs="?", choices=["status", "rebuild", "clear"], default="status")
+    p.set_defaults(func=cmd_index)
+
     p = sub.add_parser("digest", help="随机回看几个会话（随机）")
     p.add_argument("--random", type=int, default=2)
     p.add_argument("--seed", type=int, default=None)
@@ -318,7 +324,8 @@ HELP_DESCRIPTIONS = {
     "summary": "按会话总结：任务、报错、修复动作、验证状态和环境改变。适合快速回顾“这次会话到底做了什么”。",
     "additions": "列出第一次出现的命令，适合回顾新项目/新环境里引入的工具。",
     "history": "像 shell 内建 history 一样列出带编号的命令。重复命令会显示“第 k/n 次”，每个编号对应一次具体执行，可直接 cmdwhy explain <编号>。",
-    "search": "按关键词、错误签名、状态、时间、项目和会话搜索历史命令，结果保留 history 编号，可以直接 explain。",
+    "search": "按关键词、错误签名、状态、时间、项目和会话搜索历史命令；优先走 SQLite FTS5/BM25 索引，结果保留 history 编号。",
+    "index": "查看或重建 SQLite 查询索引；索引包含事件、状态、任务、错误、项目字段，并启用 FTS5。",
     "digest": "随机抽取几个会话做回顾，默认输出意图、报错和修复动作。",
     "fix": "检查命令输入：在 PATH、合法子命令和你成功用过的历史里找最像的命令，给出可直接执行的修正。",
     "diagnose": "检索同类错误：按错误签名或原文相似度，给出你以前验证有效的修法，以及 Ubuntu 通用处置建议。",
@@ -347,7 +354,8 @@ HELP_EXAMPLES = {
     "summary": "  cmdwhy summary\n  cmdwhy summary --session S2\n  cmdwhy summary --all",
     "additions": "  cmdwhy additions",
     "history": "  cmdwhy history\n  cmdwhy history -n 100\n  cmdwhy history --duplicates\n  cmdwhy history --grep status",
-    "search": "  cmdwhy search flask\n  cmdwhy search --error PORT --since 7d\n  cmdwhy search --status fail --project api\n  cmdwhy search --json",
+    "search": "  cmdwhy search flask\n  cmdwhy search --error PORT --since 7d\n  cmdwhy search --status fail --project api\n  cmdwhy search --regex 'PORT|EADDRINUSE'\n  cmdwhy search --sort relevance --json",
+    "index": "  cmdwhy index status\n  cmdwhy index rebuild\n  cmdwhy index clear",
     "digest": "  cmdwhy digest --random 2 --seed 7",
     "fix": "  cmdwhy fix 'git stauts'\n  cmdwhy fix 'gti status'\n  cmdwhy fix --last",
     "diagnose": "  cmdwhy diagnose\n  cmdwhy diagnose --text 'error: externally-managed-environment'\n  cmdwhy diagnose --signature PERM:dpkg-lock --fix",
@@ -388,7 +396,12 @@ def _renderer(args, cfg):
 
 def _analysis(cfg, files=None, use_store=True, with_context=False):
     events, meta = load_events(cfg, extra_paths=files, use_store=use_store)
-    return analyze(events, cfg, meta, with_context=with_context), meta
+    analysis = analyze(events, cfg, meta, with_context=with_context)
+    try:
+        event_index.update(cfg, analysis, rich=with_context)
+    except Exception:
+        pass
+    return analysis, meta
 
 
 def _print_json(data):
@@ -477,7 +490,7 @@ def cmd_ingest(args, cfg, renderer):
         cfg.sources = registered
         cfg.sources_configured = True
         cfg.save()
-    analysis, meta = _analysis(cfg, files=args.file, use_store=not args.no_store)
+    analysis, meta = _analysis(cfg, files=args.file, use_store=not args.no_store, with_context=True)
     if args.json:
         _print_json(analysis_to_dict(analysis))
         return 0
@@ -775,7 +788,6 @@ def cmd_history(args, cfg, renderer):
 
 
 def cmd_search(args, cfg, renderer):
-    analysis, meta = _analysis(cfg, with_context=True)
     try:
         since_ts = parse_time(args.since)
         until_ts = parse_time(args.until)
@@ -783,10 +795,12 @@ def cmd_search(args, cfg, renderer):
         print(str(exc), file=sys.stderr)
         return 2
     query = " ".join(args.query).strip()
-    try:
-        results, total = search_events(
-            analysis,
-            query=query,
+    results = None
+    total = 0
+    if event_index.is_current(cfg):
+        results, total = event_index.query(
+            cfg,
+            query_text=query,
             status=args.status,
             error=args.error,
             since_ts=since_ts,
@@ -795,13 +809,31 @@ def cmd_search(args, cfg, renderer):
             project=args.project,
             limit=args.limit,
             oldest=args.oldest,
-            regex=args.regex,
             any_term=args.any_term,
             sort=args.sort,
+            regex=args.regex,
         )
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
+    if results is None:
+        analysis, meta = _analysis(cfg, with_context=True)
+        try:
+            results, total = search_events(
+                analysis,
+                query=query,
+                status=args.status,
+                error=args.error,
+                since_ts=since_ts,
+                until_ts=until_ts,
+                session=args.session,
+                project=args.project,
+                limit=args.limit,
+                oldest=args.oldest,
+                regex=args.regex,
+                any_term=args.any_term,
+                sort=args.sort,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
     if args.json:
         _print_json([result.to_dict() for result in results])
         return 0
@@ -818,8 +850,26 @@ def cmd_search(args, cfg, renderer):
         filters.append("从 " + args.since)
     if args.until:
         filters.append("到 " + args.until)
-    print(renderer.render_search(analysis, results, total=total, query=query, filters=filters))
+    print(renderer.render_search(None, results, total=total, query=query, filters=filters))
     return 0 if results else 1
+
+
+def cmd_index(args, cfg, renderer):
+    if args.action == "clear":
+        event_index.clear(cfg)
+        print("索引已清空。")
+        return 0
+    if args.action == "rebuild":
+        _analysis(cfg, with_context=True)
+    info = event_index.status(cfg)
+    if args.json:
+        _print_json(info)
+    else:
+        print("SQLite 索引  " + info["path"])
+        print("  事件      %d 条" % info["events"])
+        print("  状态      %s" % ("最新" if info["current"] else "需要重建（cmdwhy index rebuild）"))
+        print("  大小      %.1f KB" % (info["size"] / 1024.0))
+    return 0
 
 
 def cmd_digest(args, cfg, renderer):
@@ -1171,7 +1221,9 @@ def cmd_doctor(args, cfg, renderer):
     p = renderer.p
     lines = [p.bold("cmdwhy 自检")]
     lines.append("")
+    distro = linux_system.detect()
     lines.append("  Python      %s（需要 3.8+）" % sys.version.split()[0])
+    lines.append("  系统        %s（%s / %s）" % (distro.name, distro.family, distro.pkg_manager))
     lines.append("  数据目录    %s" % cfg.home)
     writable = os.access(cfg.home, os.W_OK)
     lines.append("  可写        %s" % ("是" if writable else p("否——请检查权限", "red")))
@@ -1194,7 +1246,15 @@ def cmd_doctor(args, cfg, renderer):
     for item in info["shells"]:
         lines.append("  %-10s %s" % (item["shell"] + " hook", "已安装" if item["installed"] else "未安装"))
     lines.append("  Git         %s" % (shutil.which("git") or "未安装（无法推断分支）"))
-    lines.append("  command-not-found  %s" % (shutil.which("command-not-found") or "未安装（apt 包名提示会弱一些）"))
+    provider = distro.file_provider_command("curl").split()[0] if distro.file_provider_command("curl") else ""
+    lines.append(
+        "  包文件查询  %s"
+        % (
+            provider
+            if provider and shutil.which(provider)
+            else "未安装（可用 %s）" % distro.package_hint()
+        )
+    )
     knowledge = load_knowledge(cfg)
     summary = knowledge.summary()
     lines.append("  知识库      %d 个签名 / %d 次验证有效" % (summary["signatures"], summary["verified_fixes"]))

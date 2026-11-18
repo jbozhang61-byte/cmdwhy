@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -64,6 +66,64 @@ def parse_time(value, now=None):
             continue
     raise ValueError("无法识别的时间：%s（支持 7d / 24h / 30m / today / 2026-11-17）" % value)
 
+
+TOKEN_RE = re.compile(r"[A-Za-z0-9_./:@+-]+|[\u4e00-\u9fff]")
+
+
+def _tokens(text):
+    raw = TOKEN_RE.findall((text or "").lower())
+    out = []
+    cjk = []
+    for token in raw:
+        if len(token) == 1 and "\u4e00" <= token <= "\u9fff":
+            cjk.append(token)
+        else:
+            out.append(token)
+    # 中文用二元组，避免单字匹配过宽
+    out.extend("".join(cjk[index : index + 2]) for index in range(len(cjk) - 1))
+    if len(cjk) == 1:
+        out.append(cjk[0])
+    return out
+
+
+def _bm25(results, terms):
+    if not terms:
+        return
+    docs = []
+    for result in results:
+        tokens = []
+        tokens.extend(_tokens(result.cmd) * 2)
+        tokens.extend(_tokens(result.error))
+        tokens.extend(_tokens(result.task))
+        tokens.extend(_tokens(result.intent))
+        tokens.extend(_tokens(result.project))
+        tokens.extend(_tokens(result.cwd))
+        docs.append(tokens)
+    if not docs:
+        return
+    avgdl = sum(len(doc) for doc in docs) / float(len(docs))
+    df = Counter()
+    for doc in docs:
+        for token in set(doc):
+            df[token] += 1
+    total = len(docs)
+    k1 = 1.2
+    b = 0.75
+    for result, doc in zip(results, docs):
+        tf = Counter(doc)
+        dl = len(doc) or 1
+        score = 0.0
+        for term in terms:
+            term_tokens = _tokens(term)
+            if not term_tokens:
+                continue
+            for token in term_tokens:
+                freq = tf.get(token, 0)
+                if not freq:
+                    continue
+                idf = math.log(1.0 + (total - df[token] + 0.5) / (df[token] + 0.5))
+                score += idf * (freq * (k1 + 1)) / (freq + k1 * (1 - b + b * dl / max(avgdl, 1e-9)))
+        result.score = score
 
 def _matches_project(result, project):
     needle = project.lower()
@@ -140,17 +200,6 @@ def search_events(
             if terms and ((any_term and not matched) or (not any_term and len(matched) != len(terms))):
                 continue
             score = 0.0
-            for term in matched:
-                if term in event.cmd.lower():
-                    score += 4.0
-                if term in (error_signature + " " + error_detail).lower():
-                    score += 3.0
-                if term in (ann.task or "").lower():
-                    score += 2.0
-                if term in (ann.intent or "").lower():
-                    score += 1.5
-                if term in ((env.project if env is not None and env.project else "") + " " + (event.cwd or "")).lower():
-                    score += 1.5
         result = SearchResult(
             seq=event.seq,
             uid=event.uid,
@@ -169,6 +218,8 @@ def search_events(
             continue
         results.append(result)
         total += 1
+    if pattern is None:
+        _bm25(results, terms)
     if sort == "relevance":
         results.sort(key=lambda item: (-item.score, -item.ts, -item.seq))
     else:

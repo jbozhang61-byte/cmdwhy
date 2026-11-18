@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from . import system as linux_system
+
 HINTS = {
     "PERM": {
         "title": "权限不足",
@@ -30,8 +32,8 @@ HINTS = {
     "CMD_NOT_FOUND": {
         "title": "命令不存在或拼写错误",
         "why": "shell 在 PATH 里找不到这个命令，通常是没安装、拼错，或 PATH 没生效。",
-        "next": "先确认拼写；Ubuntu 上可用 sudo apt install <包名>，或用 command-not-found 查询包名。",
-        "avoid": "不要盲目复制网上的安装脚本；先 apt search 确认包名。",
+        "next": "先确认拼写；用当前发行版的包管理器安装（Debian/Ubuntu/Kali: apt；Arch: pacman；Fedora/RHEL: dnf；openSUSE: zypper；Alpine: apk），先搜索确认包名。",
+        "avoid": "不要盲目复制网上的安装脚本；先搜索确认包名。",
     },
     "NOT_FOUND": {
         "title": "文件或目录不存在",
@@ -233,8 +235,14 @@ def base_category(category: str) -> str:
 
 def hint_for(category: str) -> dict:
     if category and category in HINTS:
-        return HINTS[category]
-    base = base_category(category)
-    if base in HINTS:
-        return HINTS[base]
-    return HINTS["GENERIC"]
+        result = dict(HINTS[category])
+    else:
+        base = base_category(category)
+        result = dict(HINTS[base] if base in HINTS else HINTS["GENERIC"])
+    if category and category.split(":", 1)[0] in ("CMD_NOT_FOUND", "PIP668", "LOCK"):
+        try:
+            distro = linux_system.detect()
+            result["next"] += " 当前系统 %s，可用：%s" % (distro.name, distro.package_hint())
+        except Exception:
+            pass
+    return result
