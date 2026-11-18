@@ -11,6 +11,8 @@
 
 Linux 优先：Debian/Ubuntu/Kali、Arch/Manjaro、Fedora/RHEL/CentOS/Rocky/Alma、openSUSE、Alpine 都能用；纯 Python 标准库，零第三方依赖，数据全部留在本机。
 
+完整用法、安装、排障、自动化示例见 **[docs/USAGE.md](docs/USAGE.md)**。
+
 ## 30 秒感受
 
 ```bash
@@ -733,6 +735,7 @@ cmdwhy/
 │   ├── resolve.py     history 编号 / 分析序号 / 稳定 ID 解析
 │   ├── guide.py       命令地图与 bash/zsh 补全脚本
 │   └── util.py        时间/路径/距离/颜色等工具
+├── docs/USAGE.md      完整使用手册（安装、工作流、排障、自动化）
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
