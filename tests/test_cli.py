@@ -533,9 +533,9 @@ class CliTest(unittest.TestCase):
         self.assertIn("第 1/2 次", listing)
         self.assertIn("第 2/2 次", listing)
         duplicates = self.run_cli("history", "--duplicates", "--all", expect=0).stdout
-        self.assertIn("502", duplicates)
-        self.assertIn("503", duplicates)
-        self.assertNotIn("501", duplicates)
+        self.assertRegex(duplicates, r"(?m)^\s+502\s")
+        self.assertRegex(duplicates, r"(?m)^\s+503\s")
+        self.assertNotRegex(duplicates, r"(?m)^\s+501\s")
         explain = self.run_cli("explain", "503", expect=0).stdout
         self.assertIn("git status", explain)
         self.assertIn("历史编号  503", explain)
