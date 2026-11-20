@@ -383,6 +383,10 @@ class CliTest(unittest.TestCase):
         self.assertEqual(payload["count"], 13)
         self.assertEqual(len(payload["commands"]), 13)
         self.assertTrue(payload["tasks"])
+        sixty = json.loads(self.run_cli("block", "--last", "60", "--json", expect=0).stdout)
+        self.assertEqual(sixty["count"], 60)
+        default = json.loads(self.run_cli("block", "--json", expect=0).stdout)
+        self.assertEqual(default["count"], 50)
 
     def test_label_correction(self):
         self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
