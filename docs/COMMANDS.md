@@ -1,6 +1,6 @@
 # cmdwhy 命令参考
 
-版本：0.5.0（`cmdwhy version` 可查看当前安装版本）
+版本：0.6.0（`cmdwhy version` 可查看当前安装版本）
 
 完整的安装、工作流和排障说明见 [USAGE.md](USAGE.md)。
 
@@ -43,7 +43,8 @@ cmdwhy --no-color timeline   # 适合重定向到文件
 | `ingest` | 导入历史并学习知识库 | 装好后第一次分析 |
 | `analyze` | 临时分析指定文件 | 看同事的 history、看导出的日志 |
 | `timeline` | 逐条注解时间线 | 回顾某次调试 |
-| `explain` | 解释某条命令 | “我当时为什么敲这个” |
+| `explain` | 解释某条/一小段命令 | “我当时为什么敲这个” |
+| `block` | 把 50–60 条当成一个阶段 | 复盘一段调试/部署 |
 | `report` | 四段式复盘 | 写复盘、周报 |
 | `stats` | 统计 | 看错误率、修复耗时 |
 | `sessions` | 会话列表 | 先定位会话编号 |
@@ -319,12 +320,32 @@ cmdwhy explain 518 --json
 
 任务上下文默认看前后各 20 条命令，限制在同一会话、同一项目内；窗口内错误签名权重最高，其次是命令家族、当时环境（项目/cwd/分支/venv/发行版/包管理器/容器/SSH/WSL/root）、命令角色（只读排查/改变环境/运行验证）和修复链。
 
-@@@bash
+```bash
 cmdwhy explain 518 --context 40
 cmdwhy config --set context_window 30
-@@@
+```
 
 这是启发式判断，不是因果证明；任务标签会标出置信度，窗口跨项目/会话时会自动截断。
+
+### cmdwhy block
+
+```bash
+cmdwhy block 50-60
+cmdwhy block '#50-60'
+cmdwhy block h518-560
+cmdwhy block --last 60
+cmdwhy block --last 60 --json
+```
+
+`explain 50-60` 是逐条解释；`block 50-60` 把这一段当成一个阶段，输出：
+
+- 命令段、会话数、时间范围、当前环境；
+- 总体任务、阶段变化、成功/失败/修复/验证；
+- 错误签名、角色分布、环境变化；
+- 按任务分组；
+- 每条命令的作用和目的（最多 240 条）。
+
+默认无参数时分析最近 50 条；`--window` 可改上下文窗口。
 
 ### cmdwhy sessions / changes / additions
 

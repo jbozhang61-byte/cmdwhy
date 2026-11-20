@@ -78,6 +78,19 @@ cmdwhy explain 518 --context 40   # 前后各 40 条
 cmdwhy config --set context_window 30
 ```
 
+### 多条命令作为一个阶段
+
+`explain` 适合单条或几条；想把 **50–60 条**当成一次任务阶段，用 `block`：
+
+```bash
+cmdwhy block 50-60
+cmdwhy block '#50-60'
+cmdwhy block --last 60
+cmdwhy block --last 60 --json
+```
+
+它会汇总这一段的总体任务、阶段变化、错误/修复/验证、角色分布、环境变化，并附上 50–60 条命令各自的目的。`explain 50-60` 仍是逐条解释。
+
 局限：这是**启发式判断**，不是读心。任务标签会标注置信度；窗口跨越不同项目或会话时会自动截断，不会把两件事混在一起。
 
 ## 自动完成与自动纠错
@@ -264,6 +277,7 @@ cmdwhy --version
 | 想做什么 | 最短写法 |
 | --- | --- |
 | 看某条命令为什么执行 | `cmdwhy 518` / `cmdwhy '#18'` / `cmdwhy e1a2b3c4` |
+| 把 50–60 条当成一个阶段 | `cmdwhy block 50-60` / `cmdwhy block --last 60` |
 | 看最近一条 | `cmdwhy last` |
 | 看时间线 | `cmdwhy tl -n 20` |
 | 搜索 | `cmdwhy s flask` / `cmdwhy find PORT` |
@@ -400,6 +414,7 @@ cmdwhy history --grep status
 | `cmdwhy diagnose` / `--text "错误输出"` | 检索同类错误，给出你以前的修法和通用建议 |
 | `cmdwhy repair graph / reject / accept` | 查看因果图，纠正“这条不是修复” |
 | `cmdwhy label 518 --task ... --purpose ...` | 人工修正任务/目标/目的 |
+| `cmdwhy block 50-60` / `--last 60` | 多条命令的阶段总结 |
 | `cmdwhy kb` / `--signature PERM:dpkg-lock` / `--export` | 查看、检索、导出错误知识库 |
 | `cmdwhy hook install [--shell fish]` | 管理 bash / zsh / fish hook |
 | `cmdwhy run [--shell] -- 命令` | 包装执行，捕获 stderr 并即时诊断；--shell 支持管道/重定向 |
@@ -685,7 +700,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-WSL2 上 **204 个测试全部通过**；VMware 0.5.0 上 **204 个测试通过**（17.0s）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
+WSL2 上 **205 个测试全部通过**；VMware 上最近一次 **204 个测试通过**（17.0s；多命令 block 的测试还没在 VM 重跑）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 真实历史方面：当前机器能找到的真实用户历史是 **494 条**（Windows Git Bash 94 + PowerShell 401 + VM 12），没有可用的 1000+ 条用户历史，所以没有伪造。另用 1600 条**真实执行事件**（实际运行命令并记录退出码/cwd）做了规模压测：WSL 2 秒、VM 1 秒，27 个会话、53 次失败、4 条修复链，SQLite 索引 1600 条。
@@ -697,7 +712,7 @@ WSL2 上 **204 个测试全部通过**；VMware 0.5.0 上 **204 个测试通过*
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 204 个测试
+python3 -m unittest discover -s tests -v   # 205 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -740,7 +755,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             204 个单元 + 端到端 CLI 测试
+├── tests/             205 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

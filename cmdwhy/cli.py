@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 
 from . import __version__
+from . import block as block_mod
 from . import errors as err_mod
 from . import index_db as event_index
 from . import labels
@@ -206,6 +207,12 @@ def build_parser():
     p.add_argument("target", nargs="?", help="修复动作的编号（history/#/e 稳定 ID）")
     p.set_defaults(func=cmd_repair)
 
+    p = sub.add_parser("block", help="把多条命令（如 50–60 条）当成一个阶段分析")
+    p.add_argument("targets", nargs="*", help="区间/锚点，如 50-60、#50-60、h518-560")
+    p.add_argument("--last", type=int, default=0, help="直接分析最近 N 条，默认 50")
+    p.add_argument("--window", type=int, default=0, help="上下文窗口，默认使用配置")
+    p.set_defaults(func=cmd_block)
+
     p = sub.add_parser("label", help="人工修正任务/目标/目的标签")
     p.add_argument("target", nargs="?", help="命令编号（history/#/e 稳定 ID）")
     p.add_argument("--task", help="覆盖任务标签")
@@ -328,6 +335,7 @@ HELP_DESCRIPTIONS = {
     "analyze": "直接分析指定历史文件，不登记来源、不写知识库，适合临时查看别人的历史或导出的日志。",
     "timeline": "按会话展示每条命令：环境、意图、动机、报错、修复链、输入更正。",
     "explain": "完整解释一条或一段命令：时间、环境、结果、置信度、意图、动机、任务上下文、本条目的、依据、建议与后续。数字优先按 history 编号解析。",
+    "block": "把 50–60 条命令当成一个阶段分析：总体任务、阶段变化、错误/修复/验证、角色分布、环境变化、逐条目的。比逐条 explain 更适合复盘。",
     "report": "生成四段式复盘：一、报错与修复；二、环境/状态改变；三、第一次出现的命令；四、随机回看会话。",
     "stats": "统计命令数、会话数、错误率、修复链与平均修复耗时、意图分布、常用命令、高频错误。",
     "sessions": "列出所有会话的起止时间、环境、命令数、报错数和修复动作数。",
@@ -360,6 +368,7 @@ HELP_EXAMPLES = {
     "analyze": "  cmdwhy analyze examples/demo_history_output.txt\n  cmdwhy analyze ~/.zsh_history --report\n  history | cmdwhy analyze --stdin",
     "timeline": "  cmdwhy timeline\n  cmdwhy timeline -n 50 --verbose\n  cmdwhy timeline --session S2",
     "explain": "  cmdwhy explain last\n  cmdwhy explain 518            # history 输出里的编号\n  cmdwhy explain '#18'          # 分析序号\n  cmdwhy explain 518 --context 40",
+    "block": "  cmdwhy block 50-60\n  cmdwhy block '#50-60'\n  cmdwhy block --last 60\n  cmdwhy block h518-560 --json",
     "report": "  cmdwhy report\n  cmdwhy report --sections errors,changes\n  cmdwhy report --md report.md",
     "stats": "  cmdwhy stats\n  cmdwhy stats --json",
     "changes": "  cmdwhy changes",
@@ -908,6 +917,39 @@ def _last_failure(analysis):
     return None
 
 
+def cmd_block(args, cfg, renderer):
+    analysis, meta = _analysis(cfg, with_context=False)
+    if not analysis.events:
+        print("没有命令记录。先运行 cmdwhy ingest，或 cmdwhy demo 看效果。")
+        return 1
+    notes = []
+    if args.targets:
+        seqs, notes = resolve_targets(analysis, args.targets)
+    else:
+        count = args.last or 50
+        if count < 1:
+            print("--last 必须是正整数。", file=sys.stderr)
+            return 2
+        seqs = list(range(max(1, len(analysis.events) - count + 1), len(analysis.events) + 1))
+    if not seqs:
+        print("没有找到要分析的命令段。")
+        for note in notes:
+            print("  " + note)
+        return 2
+    if len(seqs) > 240:
+        print("一次最多分析 240 条；请用更小的区间，例如 cmdwhy block #50-60。", file=sys.stderr)
+        return 2
+    window = args.window or cfg.context_window
+    data = block_mod.build_block(analysis, seqs, cfg=cfg, window=window)
+    if args.json:
+        _print_json(data)
+        return 0
+    for note in notes:
+        print(renderer.p("提示：" + note, "yellow"))
+    print(block_mod.render_block(data, renderer))
+    return 0
+
+
 def cmd_label(args, cfg, renderer):
     data = labels.load(cfg)
     if args.list:
@@ -1352,6 +1394,8 @@ SHORTCUT_ALIASES = {
     "hist": "history",
     "next": "do",
     "st": "stats",
+    "blk": "block",
+    "seg": "block",
 }
 
 SHORTCUT_COMMANDS = {

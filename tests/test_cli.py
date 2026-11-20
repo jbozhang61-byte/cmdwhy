@@ -369,6 +369,21 @@ class CliTest(unittest.TestCase):
         self.assertEqual(cleared["events"], 0)
 
 
+
+    def test_block_multiple_commands(self):
+        self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
+        text = self.run_cli("block", "#18-30", expect=0).stdout
+        self.assertIn("命令段", text)
+        self.assertIn("任务", text)
+        self.assertIn("分组", text)
+        self.assertIn("环境变化", text)
+        recent = self.run_cli("block", "--last", "5", expect=0).stdout
+        self.assertIn("命令段", recent)
+        payload = json.loads(self.run_cli("block", "#18-30", "--json", expect=0).stdout)
+        self.assertEqual(payload["count"], 13)
+        self.assertEqual(len(payload["commands"]), 13)
+        self.assertTrue(payload["tasks"])
+
     def test_label_correction(self):
         self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
         proc = self.run_cli(
@@ -578,7 +593,7 @@ class CliTest(unittest.TestCase):
 
     def test_version(self):
         proc = self.run_cli("version", expect=0)
-        self.assertIn("cmdwhy 0.5.0", proc.stdout)
+        self.assertIn("cmdwhy 0.6.0", proc.stdout)
 
     def test_analyze_demo_file(self):
         proc = self.run_cli("analyze", "examples/demo_history.jsonl", "-n", "4", expect=0)

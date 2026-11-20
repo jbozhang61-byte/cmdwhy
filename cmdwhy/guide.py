@@ -9,6 +9,7 @@ COMMAND_NAMES = [
     "analyze",
     "timeline",
     "explain",
+    "block",
     "report",
     "stats",
     "sessions",
@@ -63,6 +64,8 @@ GROUPS = [
         [
             ("cmdwhy timeline -n 30", "按会话展示命令、环境、动机、报错、修复链"),
             ("cmdwhy timeline --session S2", "只看某个会话"),
+            ("cmdwhy block 50-60", "把 50–60 条命令当成一个阶段：任务、阶段、错误、修复、环境变化"),
+            ("cmdwhy block --last 60", "直接分析最近 60 条"),
             ("cmdwhy explain 518", "按 history 编号解释：任务、目的、依据、后续"),
             ("cmdwhy explain 518 --context 40", "前后各看 40 条命令判断任务"),
             ("cmdwhy explain '#18'", "按分析序号解释（# 前缀）"),

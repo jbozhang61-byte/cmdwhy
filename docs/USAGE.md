@@ -1,6 +1,6 @@
 # cmdwhy 完整使用手册
 
-版本：0.5.0  
+版本：0.6.0  
 适用：Debian / Ubuntu / Kali、Arch / Manjaro、Fedora / RHEL / CentOS / Rocky / Alma、openSUSE、Alpine  
 数据：全部本地保存，不联网、不上传。
 
@@ -175,7 +175,40 @@ cmdwhy explain 518 --json
 
 `#18` 是当前顺序，新增历史会变；`e1a2b3c4` 是稳定 ID，推荐长期引用。
 
-### 5.3 命令打错了 / 又遇到熟悉报错
+### 5.3 多条命令一起看（50–60 条）
+
+```bash
+cmdwhy block 50-60
+cmdwhy block '#50-60'
+cmdwhy block h518-560
+cmdwhy block --last 60
+cmdwhy block --last 60 --json
+```
+
+区别：
+
+- `cmdwhy explain 518`：解释**一条**；
+- `cmdwhy explain 518-520`：逐条解释**一小段**；
+- `cmdwhy block 50-60`：把这一整段当成一个**阶段**，给出总体任务、阶段变化、错误/修复/验证、角色分布、环境变化，再附逐条目的。
+
+默认没有参数时分析最近 50 条；一次最多 240 条。`--window` 可以改上下文窗口。
+
+典型输出：
+
+```text
+命令段  #50–#60  11 条 · 2 个会话 · 09:12–09:40
+环境    ~/work/api · api · git:main · venv:.venv · Ubuntu 24.04 · apt
+任务    Python 依赖与环境×7 · Git 同步与提交×4
+阶段    准备 → 排查 → 修复 → 验证
+结果    成功 7 · 失败 3 · 修复动作 3，验证 2
+错误    MODULE:flask×2 · PORT:3000×1
+角色    改变环境×5 · 只读排查×4 · 运行/验证×2
+环境变化 进入 venv .venv；cd ~/work/api/web
+分组    [Python 依赖与环境] #50–#56 ...
+命令    #50 ... 目的：...
+```
+
+### 5.4 命令打错了 / 又遇到熟悉报错
 
 ```bash
 cmdwhy fix
@@ -191,7 +224,7 @@ cmdwhy diagnose --file err.log
 
 `fix` 会看 PATH、合法子命令、你以前成功用过的命令；`diagnose` 会优先给出你验证过的同类修法。
 
-### 5.4 直接执行并自动修正
+### 5.5 直接执行并自动修正
 
 ```bash
 cw run --fix --yes --retry -- ./deploy.sh
@@ -201,7 +234,7 @@ cmdwhy run --shell -- "npm run dev | tee dev.log"
 
 它会捕获 stdout/stderr，失败后诊断并按需修正。
 
-### 5.5 让工具推断下一步
+### 5.6 让工具推断下一步
 
 ```bash
 cmdwhy next
@@ -429,6 +462,7 @@ ingest                  导入历史并学习知识库
 analyze                 临时分析文件/stdin
 timeline / tl           时间线；--page/--page-size
 explain / ex / why      解释；支持 518 / #18 / eID / last
+block / blk / seg       多条命令阶段分析；50-60 / --last 60
 summary / sum / today   会话/今天/本周/项目汇总
 search / s / find       搜索；--regex/--any/--sort relevance
 history / h             编号列表；--duplicates/--grep
