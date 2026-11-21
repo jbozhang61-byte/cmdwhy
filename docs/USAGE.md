@@ -36,7 +36,7 @@ bash install.sh
 cmdwhy --version
 ```
 
-`install.sh` 会自动识别 apt / pacman / dnf / yum / zypper / apk，安装 Python、venv、pip、git，并建立 `.venv`。
+`install.sh` 会自动识别 apt / pacman / dnf / yum / zypper / apk，安装 Python、venv、pip、setuptools、wheel、git，并建立 `.venv`。缺 `python3-venv`/ensurepip 会自动补装；构建使用系统 wheel，无网络也能安装。
 
 安装后有两个命令：
 

@@ -16,18 +16,18 @@ fi
 install_packages() {
     if command -v apt-get >/dev/null 2>&1; then
         $SUDO apt-get update -qq
-        $SUDO apt-get install -y python3 python3-venv python3-pip git
+        $SUDO apt-get install -y python3 python3-venv python3-pip python3-setuptools python3-wheel git
     elif command -v pacman >/dev/null 2>&1; then
         $SUDO pacman -Syu --noconfirm
-        $SUDO pacman -S --needed --noconfirm python python-pip git
+        $SUDO pacman -S --needed --noconfirm python python-pip python-setuptools python-wheel git
     elif command -v dnf >/dev/null 2>&1; then
-        $SUDO dnf install -y python3 python3-pip git
+        $SUDO dnf install -y python3 python3-pip python3-setuptools python3-wheel git
     elif command -v yum >/dev/null 2>&1; then
-        $SUDO yum install -y python3 python3-pip git
+        $SUDO yum install -y python3 python3-pip python3-setuptools python3-wheel git
     elif command -v zypper >/dev/null 2>&1; then
-        $SUDO zypper --non-interactive install python3 python3-pip git
+        $SUDO zypper --non-interactive install python3 python3-pip python3-setuptools python3-wheel git
     elif command -v apk >/dev/null 2>&1; then
-        $SUDO apk add --no-cache python3 py3-pip git bash
+        $SUDO apk add --no-cache python3 py3-pip py3-setuptools py3-wheel git bash
     else
         echo "未识别的包管理器；请手动安装 python3、venv、pip、git。" >&2
         exit 1
@@ -43,19 +43,25 @@ if ! python3 -c "import venv" >/dev/null 2>&1 || ! python3 -m ensurepip --versio
     echo "缺少完整 venv/ensurepip，尝试安装 python3-venv……"
     install_packages
 fi
+if ! python3 -c "import setuptools, wheel" >/dev/null 2>&1; then
+    echo "缺少 setuptools/wheel，尝试安装构建依赖……"
+    install_packages
+fi
 
-# 上次安装可能留下一个没有 pip 的半成品 .venv
-if [ -d .venv ] && ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
-    rm -rf .venv
+# 上次安装可能留下没有 pip / setuptools / wheel 的半成品 .venv
+if [ -d .venv ]; then
+    if [ ! -x .venv/bin/python ]         || ! .venv/bin/python -m pip --version >/dev/null 2>&1         || ! .venv/bin/python -c "import setuptools, wheel" >/dev/null 2>&1; then
+        rm -rf .venv
+    fi
 fi
 if [ ! -x .venv/bin/python ]; then
-    python3 -m venv .venv
+    # 无网络环境也能用系统 wheel；cmdwhy 本身没有第三方运行时依赖
+    python3 -m venv --system-site-packages .venv
 fi
 
 # shellcheck disable=SC1091
 . .venv/bin/activate
-python -m pip install --upgrade pip >/dev/null 2>&1 || true
-pip install -e .
+pip install --no-build-isolation -e .
 
 echo ""
 echo "安装完成。试试："

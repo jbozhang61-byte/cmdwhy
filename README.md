@@ -272,6 +272,7 @@ python3 -m cmdwhy demo
 ```bash
 cd cmdwhy
 bash install.sh        # 自动识别 apt/pacman/dnf/zypper/apk，建 .venv
+# 缺 python3-venv/ensurepip 会自动补装；构建使用系统 wheel，无网络也能装
 . .venv/bin/activate
 cmdwhy --version
 ```
