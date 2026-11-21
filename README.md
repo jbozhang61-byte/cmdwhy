@@ -43,7 +43,7 @@ python3 -m cmdwhy demo
 
 | 维度 | 数据来源 | 例子 |
 | --- | --- | --- |
-| 工作环境 | 历史里的 cwd + 扫描项目标记 + Git + venv + /etc/os-release + hook 记录 | `~/work/api · api(python) · git:main* · venv:.venv · Ubuntu 24.04 · ubuntu@devbox` |
+| 工作环境 | 历史里的 cwd + 扫描项目标记 + Git（含 worktree）+ venv/conda + /etc/os-release + hook 记录的 tmux/SSH/kube/aws/gcloud/docker | `~/work/api · api(python) · git:main* · venv:.venv · Ubuntu 24.04 · ubuntu@devbox` |
 | 动机 | 前后命令关系 + 命令意图分类 + 修复链 | “修复 #18 的 PERM:dpkg-lock” |
 | 报错 | hook 捕获的 exit code / stderr；没有则从后续动作反推 | `PERM:dpkg-lock`、`PORT:3000`、`MODULE:flask` |
 | 后续 | 寻找同一条命令的重跑，检查是否成功 | “在 #19 重跑并成功 → 修复已验证” |
@@ -92,6 +92,25 @@ cmdwhy block --last 60 --json
 它会汇总这一段的总体任务、阶段变化、错误/修复/验证、角色分布、环境变化，并附上 50–60 条命令各自的目的。`explain 50-60` 仍是逐条解释。
 
 局限：这是**启发式判断**，不是读心。任务标签会标注置信度；窗口跨越不同项目或会话时会自动截断，不会把两件事混在一起。
+
+### 复杂工作环境
+
+同时开着 tmux 多个 pane、SSH 到远程、多个 venv/conda、多个 kube/aws 上下文时，环境本身就是任务边界。cmdwhy 会记录并展示：
+
+- tmux/screen pane、SSH TTY、shell PID；
+- conda、nvm、venv；
+- kube context、aws profile、gcloud config、docker context；
+- Git worktree（`.git` 文件）和 monorepo 里的子项目/工作区；
+- 容器、WSL、root、发行版、包管理器。
+
+查看当前环境：
+
+```bash
+cmdwhy env
+cmdwhy env --json
+```
+
+上下文推断会在**分支、venv/conda、项目根/工作区、主机/用户、tmux/SSH 会话**变化时自动截断，避免把两个 pane 或两个项目混成同一任务。
 
 ## 自动完成与自动纠错
 
@@ -278,6 +297,7 @@ cmdwhy --version
 | --- | --- |
 | 看某条命令为什么执行 | `cmdwhy 518` / `cmdwhy '#18'` / `cmdwhy e1a2b3c4` |
 | 把 50–60 条当成一个阶段 | `cmdwhy block 50-60` / `cmdwhy block --last 60` |
+| 查看当前完整环境 | `cmdwhy env` |
 | 看最近一条 | `cmdwhy last` |
 | 看时间线 | `cmdwhy tl -n 20` |
 | 搜索 | `cmdwhy s flask` / `cmdwhy find PORT` |
@@ -422,6 +442,7 @@ cmdwhy history --grep status
 | `cmdwhy mode suggest/auto/off` | 自动完成开关 |
 | `cmdwhy mode autocorrect on/off` | cw run 失败时自动改正输入 |
 | `cmdwhy doctor` | 自检数据目录、来源、hook、Git、知识库 |
+| `cmdwhy env` | 当前完整环境：项目/工作区/分支/venv/tmux/kube/aws/conda |
 | `cmdwhy config --set idle_gap 600` | 查看/修改配置 |
 | `cmdwhy completion bash --install` | 安装 bash/zsh 补全 |
 | `cmdwhy guide` / `cmdwhy version` | 命令地图 / 版本信息 |
@@ -700,7 +721,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-WSL2 上 **205 个测试全部通过**；VMware 0.6.0 上 **205 个测试通过**（16.4s）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
+WSL2 上 **210 个测试全部通过**；VMware 上最近一次 **205 个测试通过**（16.4s；复杂环境新增测试还没在 VM 重跑）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 真实历史方面：当前机器能找到的真实用户历史是 **494 条**（Windows Git Bash 94 + PowerShell 401 + VM 12），没有可用的 1000+ 条用户历史，所以没有伪造。另用 1600 条**真实执行事件**（实际运行命令并记录退出码/cwd）做了规模压测：WSL 2 秒、VM 1 秒，27 个会话、53 次失败、4 条修复链，SQLite 索引 1600 条。
@@ -712,7 +733,7 @@ WSL2 上 **205 个测试全部通过**；VMware 0.6.0 上 **205 个测试通过*
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 205 个测试
+python3 -m unittest discover -s tests -v   # 210 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -755,7 +776,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             205 个单元 + 端到端 CLI 测试
+├── tests/             210 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

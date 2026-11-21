@@ -79,6 +79,27 @@ class Chain:
 
 # ---------------------------------------------------------------- 会话
 
+def _session_identity(event):
+    runtime = event.runtime or {}
+    for key in ("session", "tmux", "screen", "ssh_tty"):
+        value = runtime.get(key)
+        if value:
+            return key + ":" + str(value)
+    if runtime.get("shell_pid"):
+        return "pid:" + str(runtime["shell_pid"])
+    return None
+
+
+def _different_session(previous, event):
+    if previous.host and event.host and previous.host != event.host:
+        return True
+    if previous.user and event.user and previous.user != event.user:
+        return True
+    left = _session_identity(previous)
+    right = _session_identity(event)
+    return bool(left and right and left != right)
+
+
 def build_sessions(events, idle_gap, envs):
     sessions = []
     current = []
@@ -86,6 +107,9 @@ def build_sessions(events, idle_gap, envs):
         if current:
             last = current[-1]
             if event.ts and last.ts and event.ts - last.ts > idle_gap:
+                sessions.append(_make_session("S%d" % (len(sessions) + 1), current, envs))
+                current = []
+            elif _different_session(last, event):
                 sessions.append(_make_session("S%d" % (len(sessions) + 1), current, envs))
                 current = []
         current.append(event)
@@ -601,6 +625,7 @@ def analyze(events, cfg=None, meta=None, with_context=True) -> Analysis:
             "ssh": getattr(event, "ssh", None) if getattr(event, "ssh", None) is not None else (False if historical else None),
             "wsl": getattr(event, "wsl", None) if getattr(event, "wsl", None) is not None else (False if historical else None),
             "is_root": getattr(event, "is_root", None) if getattr(event, "is_root", None) is not None else (False if historical else None),
+            "runtime": getattr(event, "runtime", None) or {},
         }
         envs[event.seq] = env_cache.get(event.cwd, event.user, event.host, overrides)
     sessions = build_sessions(events, cfg.idle_gap, envs)

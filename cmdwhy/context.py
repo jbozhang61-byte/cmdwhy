@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from .intent import command_role
@@ -191,12 +192,51 @@ DEFAULT_CONTEXT = TaskContext(
 )
 
 
-def _same_project(left, right):
+def _same_environment(analysis, left_seq, right_seq):
+    left = analysis.envs.get(left_seq)
+    right = analysis.envs.get(right_seq)
     if left is None or right is None:
         return True
-    if left.project is None or right.project is None:
-        return True
-    return left.project == right.project
+    if left.host and right.host and left.host != right.host:
+        return False
+    if left.user and right.user and left.user != right.user:
+        return False
+    if left.project_root and right.project_root and left.project_root != right.project_root:
+        return False
+    if left.project and right.project and left.project != right.project:
+        return False
+    if left.branch and right.branch and left.branch != right.branch:
+        return False
+    if left.venv != right.venv:
+        return False
+    if left.container != right.container or left.ssh != right.ssh or left.wsl != right.wsl:
+        return False
+    if left.distro and right.distro and left.distro != right.distro:
+        return False
+    runtime_left = analysis.event(left_seq).runtime or {}
+    runtime_right = analysis.event(right_seq).runtime or {}
+    for key in (
+        "session",
+        "tmux",
+        "screen",
+        "ssh_tty",
+        "conda_env",
+        "kube_context",
+        "kubeconfig",
+        "aws_profile",
+        "aws_region",
+        "gcloud_config",
+        "gcloud_project",
+        "tf_workspace",
+        "compose_project",
+        "docker_context",
+        "nix_shell",
+    ):
+        a = runtime_left.get(key)
+        b = runtime_right.get(key)
+        if a and b and a != b:
+            return False
+    return True
 
 
 def _window_events(analysis, seq, window):
@@ -210,10 +250,10 @@ def _window_events(analysis, seq, window):
         high = min(high, session.events[-1].seq - 1)
     current_env = analysis.envs.get(seq)
     start = index
-    while start - 1 >= low and _same_project(analysis.envs.get(events[start - 1].seq), current_env):
+    while start - 1 >= low and _same_environment(analysis, events[start - 1].seq, seq):
         start -= 1
     end = index
-    while end + 1 <= high and _same_project(analysis.envs.get(events[end + 1].seq), current_env):
+    while end + 1 <= high and _same_environment(analysis, events[end + 1].seq, seq):
         end += 1
     return events[start: end + 1], start + 1, end + 1
 
@@ -285,10 +325,39 @@ def _env_text(env):
     if env.project:
         kind = "(%s)" % env.project_kind if env.project_kind else ""
         parts.append(env.project + kind)
+    if env.workspace and env.project_root:
+        try:
+            if os.path.abspath(env.workspace) != os.path.abspath(env.project_root):
+                parts.append("repo:" + os.path.basename(env.workspace))
+        except (TypeError, ValueError):
+            pass
     if env.branch:
         parts.append("git:" + env.branch + ("*" if env.dirty else ""))
     if env.venv:
         parts.append("venv:" + env.venv)
+    runtime = env.runtime or {}
+    if runtime.get("conda_env"):
+        parts.append("conda:" + runtime["conda_env"])
+    if runtime.get("kube_context"):
+        parts.append("kube:" + runtime["kube_context"])
+    if runtime.get("aws_profile"):
+        parts.append("aws:" + runtime["aws_profile"])
+    if runtime.get("gcloud_config"):
+        parts.append("gcloud:" + runtime["gcloud_config"])
+    if runtime.get("gcloud_project"):
+        parts.append("gcp:" + runtime["gcloud_project"])
+    if runtime.get("tf_workspace"):
+        parts.append("tf:" + runtime["tf_workspace"])
+    if runtime.get("aws_region"):
+        parts.append("aws-region:" + runtime["aws_region"])
+    if runtime.get("compose_project"):
+        parts.append("compose:" + runtime["compose_project"])
+    if runtime.get("nix_shell"):
+        parts.append("nix")
+    if not runtime.get("kube_context") and runtime.get("kubeconfig"):
+        parts.append("kubeconfig:" + runtime["kubeconfig"])
+    if runtime.get("docker_context") and runtime["docker_context"] != "default":
+        parts.append("docker:" + runtime["docker_context"])
     if env.distro:
         parts.append(env.distro)
     if env.cwd and env.wsl:
@@ -372,6 +441,20 @@ def _environment_changes(analysis, window_events):
                     changes.append("进入 venv " + env.venv)
                 elif previous.venv:
                     changes.append("离开 venv " + previous.venv)
+            old_runtime = previous.runtime or {}
+            new_runtime = env.runtime or {}
+            for key, label in (
+                ("conda_env", "conda"),
+                ("kube_context", "kube"),
+                ("aws_profile", "aws"),
+                ("gcloud_config", "gcloud"),
+                ("docker_context", "docker"),
+                ("tmux", "tmux"),
+            ):
+                old_value = old_runtime.get(key)
+                new_value = new_runtime.get(key)
+                if old_value and new_value and old_value != new_value:
+                    changes.append("%s %s → %s" % (label, old_value, new_value))
         previous = env
     unique = []
     for change in changes:

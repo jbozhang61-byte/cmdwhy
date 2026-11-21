@@ -370,6 +370,15 @@ class CliTest(unittest.TestCase):
 
 
 
+
+    def test_env_command(self):
+        text = self.run_cli("env", expect=0).stdout
+        self.assertIn("当前环境", text)
+        self.assertIn("目录", text)
+        payload = json.loads(self.run_cli("env", "--json", expect=0).stdout)
+        self.assertIn("cwd", payload)
+        self.assertIsInstance(payload["runtime"], dict)
+
     def test_block_multiple_commands(self):
         self.run_cli("ingest", "--file", "examples/demo_history.jsonl", expect=0)
         text = self.run_cli("block", "#18-30", expect=0).stdout

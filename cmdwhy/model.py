@@ -137,6 +137,7 @@ class Event:
     ssh: bool = None
     wsl: bool = None
     is_root: bool = None
+    runtime: dict = field(default_factory=dict)
     source: str = "history"
     sid: str = ""
     session_tag: str = None
@@ -189,6 +190,7 @@ class Event:
             "ssh": self.ssh,
             "wsl": self.wsl,
             "is_root": self.is_root,
+            "runtime": self.runtime,
             "source": self.source,
             "sid": self.sid,
         }
@@ -219,6 +221,7 @@ class Event:
             ssh=_to_bool(data.get("ssh")),
             wsl=_to_bool(data.get("wsl")),
             is_root=_to_bool(data.get("is_root", data.get("root"))),
+            runtime=data.get("runtime") if isinstance(data.get("runtime"), dict) else {},
             source=str(data.get("source") or "hook"),
             sid=str(data.get("sid") or ""),
             session_tag=data.get("session_tag"),
@@ -281,16 +284,24 @@ class EnvInfo:
     wsl: bool = False
     pkg_manager: str = None
     shell: str = None
+    workspace: str = None
+    runtime: dict = field(default_factory=dict)
 
     def short(self, home=None, width=34) -> str:
         parts = [short_cwd(self.cwd, home, width)]
         if self.project:
             kind = "(%s)" % self.project_kind if self.project_kind else ""
             parts.append(self.project + kind)
+        if self.workspace and self.project_root and self.workspace != self.project_root:
+            parts.append("repo:" + os.path.basename(self.workspace))
         if self.branch:
             parts.append("git:" + self.branch + ("*" if self.dirty else ""))
         if self.venv:
             parts.append("venv:" + self.venv)
+        runtime = self.runtime or {}
+        for key, label in (("conda_env", "conda:"), ("kube_context", "kube:"), ("aws_profile", "aws:")):
+            if runtime.get(key):
+                parts.append(label + runtime[key])
         return " · ".join(parts)
 
     def full(self, home=None) -> str:
@@ -300,6 +311,8 @@ class EnvInfo:
         if self.project:
             kind = "（%s 项目）" % self.project_kind if self.project_kind else ""
             bits.append(self.project + kind)
+        if self.workspace and self.workspace != self.project_root:
+            bits.append("Git 工作区 " + self.workspace)
         if self.branch:
             bits.append("分支 %s%s" % (self.branch, "（有未提交改动）" if self.dirty else ""))
         if self.venv:
@@ -321,6 +334,17 @@ class EnvInfo:
             bits.append("WSL")
         if self.pkg_manager:
             bits.append("包管理 " + self.pkg_manager)
+        runtime = self.runtime or {}
+        for key, label in (
+            ("tmux", "tmux "),
+            ("kube_context", "kube context "),
+            ("aws_profile", "aws profile "),
+            ("gcloud_project", "gcp project "),
+            ("tf_workspace", "terraform workspace "),
+            ("conda_env", "conda "),
+        ):
+            if runtime.get(key):
+                bits.append(label + runtime[key])
         return " · ".join(bits)
 
     def to_dict(self) -> dict:
@@ -329,6 +353,7 @@ class EnvInfo:
             "project": self.project,
             "project_root": self.project_root,
             "project_kind": self.project_kind,
+            "workspace": self.workspace,
             "branch": self.branch,
             "dirty": self.dirty,
             "venv": self.venv,
@@ -342,6 +367,7 @@ class EnvInfo:
             "wsl": self.wsl,
             "pkg_manager": self.pkg_manager,
             "shell": self.shell,
+            "runtime": self.runtime,
         }
 
 

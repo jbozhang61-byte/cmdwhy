@@ -284,6 +284,9 @@ def build_parser():
     p.add_argument("value", nargs="?", default=None, help="autocorrect on/off")
     p.set_defaults(func=cmd_mode)
 
+    p = sub.add_parser("env", help="查看当前完整工作环境（项目/分支/venv/tmux/kube/aws）")
+    p.set_defaults(func=cmd_env)
+
     p = sub.add_parser("doctor", help="自检：数据目录、来源、hook、Git、命令可用性")
     p.set_defaults(func=cmd_doctor)
 
@@ -355,6 +358,7 @@ HELP_DESCRIPTIONS = {
     "record": "内部命令：由 shell hook 调用，记录单条命令。一般不需要手动执行。",
     "run": "包装执行命令：捕获 stdout/stderr、记录退出码；失败后即时诊断，可自动执行安全的修正。",
     "doctor": "自检：Python 版本、数据目录可写性、历史来源、hook 安装状态、Git、command-not-found、知识库。",
+    "env": "打印当前完整环境：目录、项目/工作区、分支、venv/conda、tmux/SSH、kube/aws/gcloud/docker 上下文、发行版和权限。",
     "guide": "按用途分组打印全部命令，适合第一次使用或忘记命令时查看。",
     "version": "显示 cmdwhy 版本、Python 版本、数据目录、历史来源数量和知识库路径。",
     "config": "查看配置，或读取/修改单个配置项（sources、idle_gap、window、redact、learn、color、max_events、ignore_prefixes）。",
@@ -386,6 +390,7 @@ HELP_EXAMPLES = {
     "hook": "  cmdwhy hook install\n  cmdwhy hook status\n  cmdwhy hook install --print --shell bash",
     "run": "  cmdwhy run -- npm run dev\n  cmdwhy run --fix -- python3 app.py\n  cw run --fix --yes -- git stauts",
     "doctor": "  cmdwhy doctor",
+    "env": "  cmdwhy env\n  cmdwhy env --json",
     "guide": "  cmdwhy guide\n  cmdwhy guide --json",
     "config": "  cmdwhy config\n  cmdwhy config --get idle_gap\n  cmdwhy config --set idle_gap 600\n  cmdwhy config --set sources ~/.bash_history,~/.zsh_history",
     "export": "  cmdwhy export --format md -o report.md\n  cmdwhy export --format json -o history.json\n  cmdwhy export --format timeline -n 100",
@@ -1318,6 +1323,82 @@ def cmd_mode(args, cfg, renderer):
         return 0
     print("用法：cmdwhy mode [status|off|suggest|auto|autocorrect on|off]", file=sys.stderr)
     return 2
+
+
+def cmd_env(args, cfg, renderer):
+    env = quick_env(os.getcwd())
+    if args.json:
+        _print_json(
+            {
+                "cwd": env.cwd,
+                "project": env.project,
+                "project_root": env.project_root,
+                "workspace": env.workspace,
+                "project_kind": env.project_kind,
+                "branch": env.branch,
+                "dirty": env.dirty,
+                "venv": env.venv,
+                "python": env.python,
+                "distro": env.distro,
+                "pkg_manager": env.pkg_manager,
+                "shell": env.shell,
+                "user": env.user,
+                "host": env.host,
+                "is_root": env.is_root,
+                "container": env.container,
+                "ssh": env.ssh,
+                "wsl": env.wsl,
+                "runtime": env.runtime,
+            }
+        )
+        return 0
+    print(renderer.p.bold("当前环境"))
+    print("  目录    " + (env.cwd or "未知"))
+    if env.project:
+        print("  项目    %s%s" % (env.project, " (%s)" % env.project_kind if env.project_kind else ""))
+    if env.workspace and env.project_root and os.path.abspath(env.workspace) != os.path.abspath(env.project_root):
+        print("  工作区  %s" % env.workspace)
+    if env.branch:
+        print("  分支    %s%s" % (env.branch, "（有未提交改动）" if env.dirty else ""))
+    if env.venv:
+        print("  venv    %s%s" % (env.venv, " / Python " + env.python if env.python else ""))
+    runtime = env.runtime or {}
+    labels = (
+        ("session", "会话"),
+        ("tmux", "tmux"),
+        ("screen", "screen"),
+        ("ssh_tty", "SSH"),
+        ("kube_context", "kube"),
+        ("kubeconfig", "kubeconfig"),
+        ("aws_profile", "aws"),
+        ("aws_region", "aws region"),
+        ("gcloud_config", "gcloud"),
+        ("gcloud_project", "gcp project"),
+        ("tf_workspace", "terraform"),
+        ("compose_project", "compose"),
+        ("nix_shell", "nix"),
+        ("docker_context", "docker"),
+        ("conda_env", "conda"),
+        ("nvm", "nvm"),
+        ("sudo_user", "sudo 用户"),
+        ("shell_pid", "shell PID"),
+    )
+    for key, label in labels:
+        if runtime.get(key):
+            print("  %-7s %s" % (label, runtime[key]))
+    if env.distro:
+        print("  发行版  " + env.distro)
+    if env.pkg_manager:
+        print("  包管理  " + env.pkg_manager)
+    who = (env.user or "") + ("@" + env.host if env.host else "")
+    if who:
+        print("  用户    " + who)
+    flags = [name for name, value in (("root", env.is_root), ("container", env.container), ("ssh", env.ssh), ("WSL", env.wsl)) if value]
+    if flags:
+        print("  权限    " + " · ".join(flags))
+    print("")
+    print("  概要    " + renderer._env_line(env))
+    return 0
 
 
 def cmd_doctor(args, cfg, renderer):

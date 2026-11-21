@@ -395,7 +395,28 @@ cmdwhy hook uninstall
 - hook 不改变命令结果，只旁路记录；
 - 连续相同的命令会分别记录。
 
-## 12. 支持的发行版
+## 12. 复杂工作环境
+
+cmdwhy 把下面这些当作**环境身份**，而不只是路径：
+
+- tmux/screen pane、SSH TTY、shell PID；
+- conda、nvm、venv；
+- kube context、aws profile、gcloud config、docker context；
+- Git worktree（`.git` 文件）与 monorepo 子项目；
+- 主机、用户、容器、WSL、root、发行版。
+
+查看当前环境：
+
+```bash
+cmdwhy env
+cmdwhy env --json
+```
+
+这些值会随 hook 事件一起记录；上下文推断在分支、venv/conda、项目根、主机/用户或 tmux/SSH 会话变化时自动截断，避免把并行 pane 或两个项目混成一个任务。
+
+Git worktree 的 `.git` 是一个文件，cmdwhy 也能识别；monorepo 里会同时保留子项目名和 git 工作区。
+
+## 13. 支持的发行版
 
 | 发行版 | 包管理器 | 说明 |
 | --- | --- | --- |
@@ -407,7 +428,7 @@ cmdwhy hook uninstall
 
 命令缺失、venv 安装、包搜索会按当前包管理器生成，不写死 apt。
 
-## 13. 常见问题
+## 14. 常见问题
 
 ### 没有历史 / 记录为空
 
@@ -453,7 +474,7 @@ cmdwhy label 518 --task "..." --purpose "..."
 - `search` 优先走索引；
 - 5 万条以上建议定期清理或拆分数据目录。
 
-## 14. 命令速查
+## 15. 命令速查
 
 ```text
 demo                    内置演示
@@ -477,13 +498,14 @@ mode                    autopilot/autocorrect 开关
 hook                    bash/zsh/fish hook
 index                   SQLite 索引 status/rebuild/clear
 doctor                  自检
+env                     当前完整环境（tmux/kube/aws/conda/worktree）
 stats / report / export 统计、报告、导出
 config                  配置
 completion              bash/zsh 补全
 guide / version         命令地图 / 版本
 ```
 
-## 15. 安全边界
+## 16. 安全边界
 
 - 默认 `suggest`，不自动执行；
 - `auto` 只跑低风险；
@@ -493,7 +515,7 @@ guide / version         命令地图 / 版本
 - `cd`、`source`、`export` 不会自动执行；
 - 自动修正只做低风险且身份明确的动作；sudo 修正必须显式 `--yes`。
 
-## 16. 开发与测试
+## 17. 开发与测试
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -504,7 +526,7 @@ coverage report -m
 
 CI：Ubuntu 22.04/24.04 × Python 3.8–3.12，Debian 12、Arch、Fedora、AlmaLinux 9、Alpine，加 shellcheck。
 
-## 17. 项目地址
+## 18. 项目地址
 
 https://github.com/jbozhang61-byte/cmdwhy
 

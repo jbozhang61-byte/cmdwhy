@@ -132,6 +132,51 @@ def detect_pkg_manager():
     return None
 
 
+def runtime_profile():
+    """捕获复杂工作环境里容易丢失的会话标识（不记录敏感值）。"""
+    data = {}
+
+    def put(key, value):
+        if value:
+            data[key] = str(value)[:160]
+
+    for key in ("CMDWHY_SESSION_ID", "SHELL_SESSION_ID", "WT_SESSION", "TERM_SESSION_ID"):
+        if os.environ.get(key):
+            put("session", os.environ[key])
+            break
+    for key, name in (
+        ("TMUX_PANE", "tmux"),
+        ("STY", "screen"),
+        ("SSH_TTY", "ssh_tty"),
+        ("KUBE_CONTEXT", "kube_context"),
+        ("AWS_PROFILE", "aws_profile"),
+        ("AWS_DEFAULT_PROFILE", "aws_profile"),
+        ("CLOUDSDK_ACTIVE_CONFIG_NAME", "gcloud_config"),
+        ("DOCKER_CONTEXT", "docker_context"),
+        ("CONDA_DEFAULT_ENV", "conda_env"),
+        ("TF_WORKSPACE", "tf_workspace"),
+        ("AWS_REGION", "aws_region"),
+        ("AWS_DEFAULT_REGION", "aws_region"),
+        ("GOOGLE_CLOUD_PROJECT", "gcloud_project"),
+        ("COMPOSE_PROJECT_NAME", "compose_project"),
+        ("IN_NIX_SHELL", "nix_shell"),
+        ("SUDO_USER", "sudo_user"),
+        ("TERM_PROGRAM", "terminal"),
+        ("NVM_BIN", "nvm"),
+    ):
+        put(name, os.environ.get(key))
+    kubeconfig = os.environ.get("KUBECONFIG")
+    if kubeconfig:
+        put("kubeconfig", os.path.basename(kubeconfig.split(os.pathsep)[0]))
+    try:
+        put("shell_pid", os.getppid())
+    except OSError:
+        pass
+    if not data.get("session"):
+        put("session", data.get("tmux") or data.get("screen") or data.get("ssh_tty"))
+    return data
+
+
 def pkg_manager_for_distro(distro):
     text = (distro or "").lower()
     if any(name in text for name in ("ubuntu", "debian", "kali", "mint", "pop", "raspbian")):
@@ -193,7 +238,7 @@ def detect_project(cwd):
         return None
     root = None
     for _ in range(16):
-        if os.path.isdir(os.path.join(current, ".git")):
+        if os.path.exists(os.path.join(current, ".git")):
             root = current
             break
         if any(os.path.exists(os.path.join(current, name)) for name, _ in PROJECT_MARKERS):
@@ -225,8 +270,9 @@ def detect_project(cwd):
     if any(name.endswith((".csproj", ".sln", ".fsproj")) for name in root_names):
         kinds.append("dotnet")
         marks.append("*.csproj")
-    if not kinds and os.path.isdir(os.path.join(root, ".git")):
+    if not kinds and os.path.exists(os.path.join(root, ".git")):
         kinds = ["git"]
+        marks.append(".git")
     kind = next((item for item in KIND_ORDER if item in kinds), kinds[0] if kinds else None)
     return root, kind, marks
 
@@ -288,6 +334,7 @@ def build_env(cwd, user=None, host=None, overrides=None) -> EnvInfo:
     env.ssh = is_ssh()
     env.wsl = is_wsl()
     env.shell = os.path.basename(os.environ.get("SHELL") or os.environ.get("ComSpec") or "") or None
+    env.runtime = runtime_profile()
     override_distro = (overrides or {}).get("distro")
     env.distro = override_distro or detect_distro()
     env.pkg_manager = pkg_manager_for_distro(env.distro) if override_distro else detect_pkg_manager()
@@ -299,9 +346,12 @@ def build_env(cwd, user=None, host=None, overrides=None) -> EnvInfo:
     if info:
         env.branch = info["branch"]
         env.dirty = info["dirty"]
+        env.workspace = info["root"]
         if not env.project:
             env.project = os.path.basename(info["root"])
             env.project_root = info["root"]
+    elif env.project_root:
+        env.workspace = env.project_root
     env.venv = detect_venv(env.cwd)
     if env.venv:
         env.python = venv_python(env.venv, env.cwd)
@@ -352,6 +402,7 @@ class EnvCache:
             env.wsl = is_wsl()
             env.pkg_manager = detect_pkg_manager()
             env.shell = os.path.basename(os.environ.get("SHELL") or os.environ.get("ComSpec") or "") or None
+            env.runtime = runtime_profile()
             for field, value in overrides.items():
                 if value is not None and hasattr(env, field):
                     setattr(env, field, value)

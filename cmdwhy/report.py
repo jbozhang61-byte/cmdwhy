@@ -66,10 +66,39 @@ class Renderer:
         if env.project:
             kind = "(%s)" % env.project_kind if env.project_kind else ""
             parts.append(env.project + kind)
+        if env.workspace and env.project_root:
+            try:
+                if os.path.abspath(env.workspace) != os.path.abspath(env.project_root):
+                    parts.append("repo:" + os.path.basename(env.workspace))
+            except (TypeError, ValueError):
+                pass
         if env.branch:
             parts.append("git:" + env.branch + ("*" if env.dirty else ""))
         if env.venv:
             parts.append("venv:" + env.venv)
+        runtime = env.runtime or {}
+        if runtime.get("conda_env"):
+            parts.append("conda:" + runtime["conda_env"])
+        if runtime.get("kube_context"):
+            parts.append("kube:" + runtime["kube_context"])
+        if runtime.get("aws_profile"):
+            parts.append("aws:" + runtime["aws_profile"])
+        if runtime.get("gcloud_config"):
+            parts.append("gcloud:" + runtime["gcloud_config"])
+        if runtime.get("gcloud_project"):
+            parts.append("gcp:" + runtime["gcloud_project"])
+        if runtime.get("tf_workspace"):
+            parts.append("tf:" + runtime["tf_workspace"])
+        if runtime.get("aws_region"):
+            parts.append("aws-region:" + runtime["aws_region"])
+        if runtime.get("compose_project"):
+            parts.append("compose:" + runtime["compose_project"])
+        if runtime.get("nix_shell"):
+            parts.append("nix")
+        if not runtime.get("kube_context") and runtime.get("kubeconfig"):
+            parts.append("kubeconfig:" + runtime["kubeconfig"])
+        if runtime.get("docker_context") and runtime["docker_context"] != "default":
+            parts.append("docker:" + runtime["docker_context"])
         if env.distro:
             parts.append(env.distro)
         if env.cwd and env.wsl:
