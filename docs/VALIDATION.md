@@ -12,12 +12,12 @@
 | bash | 5.2.21 | 5.2.21 |
 | git | 2.43.0 | 2.43.0 |
 | zsh / fish | zsh 5.9 / fish 3.7 | 未安装 |
-| 测试 | 210 passed | 210 passed |
+| 测试 | 211 passed | 210 passed |
 | 用时 | 53.9s | 22.8s |
 
 ## 验证过的功能
 
-- python3 -m unittest discover -s tests：210 个测试全部通过（VM 上也是 210 个）；
+- python3 -m unittest discover -s tests：211 个测试全部通过（VM 上最近一次 210 个）；
 - cmdwhy demo：时间线、任务上下文、history 编号显示正常；
 - cmdwhy fix "git stauts"：干净环境下判定为高可信度，建议 git status；
 - cmdwhy ingest + cmdwhy history --duplicates --all：重复的 git status 分别编号；

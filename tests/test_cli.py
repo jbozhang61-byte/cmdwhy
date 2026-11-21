@@ -371,6 +371,21 @@ class CliTest(unittest.TestCase):
 
 
 
+
+    def test_recent_nth_command(self):
+        path = self.write_history_output()
+        self.run_cli("ingest", "--file", path, expect=0)
+        second = self.run_cli("recent", "2", expect=0).stdout
+        self.assertIn("最近第 2 条", second)
+        self.assertIn("503", second)
+        self.assertIn("git push", second)
+        latest = self.run_cli("recent", "1", expect=0).stdout
+        self.assertIn("git status", latest)
+        alias = self.run_cli("last", "2", expect=0).stdout
+        self.assertIn("503", alias)
+        missing = self.run_cli("recent", "99", expect=2)
+        self.assertIn("历史只有", missing.stdout)
+
     def test_env_command(self):
         text = self.run_cli("env", expect=0).stdout
         self.assertIn("当前环境", text)

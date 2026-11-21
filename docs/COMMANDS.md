@@ -44,6 +44,7 @@ cmdwhy --no-color timeline   # 适合重定向到文件
 | `analyze` | 临时分析指定文件 | 看同事的 history、看导出的日志 |
 | `timeline` | 逐条注解时间线 | 回顾某次调试 |
 | `explain` | 解释某条/一小段命令 | “我当时为什么敲这个” |
+| `recent` | 解释最近第 N 条 | 最近第 3 条 |
 | `block` | 把 50–60 条当成一个阶段 | 复盘一段调试/部署 |
 | `report` | 四段式复盘 | 写复盘、周报 |
 | `stats` | 统计 | 看错误率、修复耗时 |
@@ -356,6 +357,17 @@ cmdwhy block --last 60 --json
 - 每条命令的作用和目的（最多 240 条）。
 
 默认无参数时分析最近 50 条；`--window` 可改上下文窗口。
+
+### cmdwhy recent
+
+```bash
+cmdwhy recent 1        # 最新
+cmdwhy recent 3        # 最近第 3 条
+cmdwhy last 3          # 同上
+cmdwhy recent 3 --json
+```
+
+`recent N` 只看**一条**：从最新往回数第 N 条（1 = 最新）。要看最近 N 条列表用 `cmdwhy timeline -n N`；要汇总最近 N 条用 `cmdwhy block --last N`。
 
 ### cmdwhy sessions / changes / additions
 

@@ -76,6 +76,10 @@ python3 -m cmdwhy demo
 ```bash
 cmdwhy explain 518 --context 40   # 前后各 40 条
 cmdwhy config --set context_window 30
+
+cmdwhy recent 1        # 最新一条
+cmdwhy recent 3        # 最近第 3 条
+cmdwhy last 3          # 同上
 ```
 
 ### 多条命令作为一个阶段
@@ -298,7 +302,8 @@ cmdwhy --version
 | 看某条命令为什么执行 | `cmdwhy 518` / `cmdwhy '#18'` / `cmdwhy e1a2b3c4` |
 | 把 50–60 条当成一个阶段 | `cmdwhy block 50-60` / `cmdwhy block --last 60` |
 | 查看当前完整环境 | `cmdwhy env` |
-| 看最近一条 | `cmdwhy last` |
+| 看最近一条 | `cmdwhy last` / `cmdwhy recent 1` |
+| 看最近第 N 条 | `cmdwhy recent 3` / `cmdwhy last 3` |
 | 看时间线 | `cmdwhy tl -n 20` |
 | 搜索 | `cmdwhy s flask` / `cmdwhy find PORT` |
 | 会话/今天/本周总结 | `cmdwhy sum` / `cmdwhy today` / `cmdwhy week` |
@@ -721,7 +726,7 @@ $ cmdwhy fix "gti status"
 - **WSL2**：Ubuntu 24.04.3 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0；
 - **VMware Workstation**：Ubuntu 24.04.5 LTS，Python 3.12.3，bash 5.2.21，git 2.43.0。
 
-WSL2 上 **210 个测试全部通过**；VMware 0.6.0 上 **210 个测试通过**（22.8s）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
+WSL2 上 **211 个测试全部通过**；VMware 上最近一次 **210 个测试通过**（22.8s；recent 命令的测试还没在 VM 重跑）。WSL 里还实测了 zsh 5.9、fish 3.7 的 hook，连续两次相同的 `git status` 分别记录；5000 条历史第二次加载从 0.090s 降到 0.036s（SQLite 解析缓存）。
 
 完整记录见 **[docs/VALIDATION.md](docs/VALIDATION.md)**。
 真实历史方面：当前机器能找到的真实用户历史是 **494 条**（Windows Git Bash 94 + PowerShell 401 + VM 12），没有可用的 1000+ 条用户历史，所以没有伪造。另用 1600 条**真实执行事件**（实际运行命令并记录退出码/cwd）做了规模压测：WSL 2 秒、VM 1 秒，27 个会话、53 次失败、4 条修复链，SQLite 索引 1600 条。
@@ -733,7 +738,7 @@ WSL2 上 **210 个测试全部通过**；VMware 0.6.0 上 **210 个测试通过*
 ## 开发与测试
 
 ```bash
-python3 -m unittest discover -s tests -v   # 210 个测试
+python3 -m unittest discover -s tests -v   # 211 个测试
 make demo                                  # 内置演示
 python3 -m compileall -q cmdwhy tests      # 语法检查
 ```
@@ -776,7 +781,7 @@ cmdwhy/
 ├── docs/COMMANDS.md   完整命令参考
 ├── docs/VALIDATION.md Ubuntu WSL / VMware 验证记录
 ├── examples/          样例输出与演示数据
-├── tests/             210 个单元 + 端到端 CLI 测试
+├── tests/             211 个单元 + 端到端 CLI 测试
 ├── install.sh         Ubuntu 一键安装
 ├── pyproject.toml
 └── Makefile

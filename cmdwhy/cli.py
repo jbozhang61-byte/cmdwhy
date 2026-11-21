@@ -135,6 +135,11 @@ def build_parser():
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(func=cmd_explain)
 
+    p = sub.add_parser("recent", help="解释最近第 N 条命令（1=最新）")
+    p.add_argument("number", nargs="?", type=int, default=1, help="最近第几条，默认 1")
+    p.add_argument("--context", type=int, default=None, help="前后各看多少条命令，默认 20")
+    p.set_defaults(func=cmd_recent)
+
     p = sub.add_parser("report", help="生成四段式复盘：报错 / 改变 / 添加 / 随机")
     p.add_argument("--sections", default="errors,changes,additions,random", help="逗号分隔")
     p.add_argument("--random", type=int, default=2, help="随机回看会话数")
@@ -339,6 +344,8 @@ HELP_DESCRIPTIONS = {
     "timeline": "按会话展示每条命令：环境、意图、动机、报错、修复链、输入更正。",
     "explain": "完整解释一条或一段命令：时间、环境、结果、置信度、意图、动机、任务上下文、本条目的、依据、建议与后续。数字优先按 history 编号解析。",
     "block": "把 50–60 条命令当成一个阶段分析：总体任务、阶段变化、错误/修复/验证、角色分布、环境变化、逐条目的。比逐条 explain 更适合复盘。",
+    "recent": "解释最近第 N 条命令：recent 1 是最新，recent 3 是最近第 3 条；last 3 同义。",
+
     "report": "生成四段式复盘：一、报错与修复；二、环境/状态改变；三、第一次出现的命令；四、随机回看会话。",
     "stats": "统计命令数、会话数、错误率、修复链与平均修复耗时、意图分布、常用命令、高频错误。",
     "sessions": "列出所有会话的起止时间、环境、命令数、报错数和修复动作数。",
@@ -373,6 +380,7 @@ HELP_EXAMPLES = {
     "timeline": "  cmdwhy timeline\n  cmdwhy timeline -n 50 --verbose\n  cmdwhy timeline --session S2",
     "explain": "  cmdwhy explain last\n  cmdwhy explain 518            # history 输出里的编号\n  cmdwhy explain '#18'          # 分析序号\n  cmdwhy explain 518 --context 40",
     "block": "  cmdwhy block 50-60\n  cmdwhy block '#50-60'\n  cmdwhy block --last 60\n  cmdwhy block h518-560 --json",
+    "recent": "  cmdwhy recent 1\n  cmdwhy recent 3\n  cmdwhy last 3",
     "report": "  cmdwhy report\n  cmdwhy report --sections errors,changes\n  cmdwhy report --md report.md",
     "stats": "  cmdwhy stats\n  cmdwhy stats --json",
     "changes": "  cmdwhy changes",
@@ -920,6 +928,25 @@ def _last_failure(analysis):
         if ann.status in ("fail", "suspected") and ann.error is not None:
             return ann
     return None
+
+
+def cmd_recent(args, cfg, renderer):
+    analysis, meta = _analysis(cfg)
+    if not analysis.events:
+        print("没有命令记录。先运行 cmdwhy ingest，或 cmdwhy hook install。")
+        return 1
+    number = args.number or 1
+    if number < 1:
+        print("用法：cmdwhy recent 3   （3 = 最近第 3 条，1 = 最新）", file=sys.stderr)
+        return 2
+    if number > len(analysis.events):
+        print("历史只有 %d 条，没有最近第 %d 条。" % (len(analysis.events), number))
+        return 2
+    seq = len(analysis.events) - number + 1
+    if not args.json:
+        print(renderer.p("最近第 %d 条 → #%d" % (number, seq), "grey"))
+    fake = argparse.Namespace(target=["#%d" % seq], context=args.context, json=args.json)
+    return cmd_explain(fake, cfg, renderer)
 
 
 def cmd_block(args, cfg, renderer):
@@ -1503,6 +1530,8 @@ def _expand_shorthand(rest):
         return SHORTCUT_COMMANDS[lowered] + list(rest[1:])
     if lowered in SHORTCUT_ALIASES:
         return [SHORTCUT_ALIASES[lowered]] + list(rest[1:])
+    if lowered == "last" and len(rest) > 1 and str(rest[1]).isdigit():
+        return ["recent", str(rest[1])] + list(rest[2:])
     if TARGET_RE.match(first):
         return ["explain"] + list(rest)
     return rest

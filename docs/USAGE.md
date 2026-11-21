@@ -107,7 +107,8 @@ cmdwhy doctor
 | 想做什么 | 最短写法 |
 | --- | --- |
 | 看第 518 条 | `cmdwhy 518` |
-| 看最近一条 | `cmdwhy last` |
+| 看最近一条 | `cmdwhy last` / `cmdwhy recent 1` |
+| 看最近第 N 条 | `cmdwhy recent 3` / `cmdwhy last 3` |
 | 用稳定 ID | `cmdwhy e1a2b3c4` |
 | 时间线 | `cmdwhy tl -n 20` |
 | 搜索 | `cmdwhy s flask` / `cmdwhy find PORT` |
@@ -130,7 +131,7 @@ cmdwhy doctor
 - `st` = stats
 - `today` / `week` = summary --today / --week
 
-数字目标 `518`、`#18`、`h518`、`e1a2b3c4`、`uid:e1a2b3c4`、`last` 会自动走 `explain`。
+数字目标 `518`、`#18`、`h518`、`e1a2b3c4`、`uid:e1a2b3c4`、`last` 会自动走 `explain`；`last 3` 等同 `recent 3`。
 
 ## 5. 五个核心工作流
 
@@ -160,6 +161,8 @@ cmdwhy week
 cmdwhy 518
 cmdwhy '#18'
 cmdwhy last
+cmdwhy recent 3        # 最近第 3 条
+cmdwhy last 3          # 同上
 cmdwhy e1a2b3c4
 cmdwhy explain 518 --context 40
 cmdwhy explain 518 --json
@@ -174,6 +177,8 @@ cmdwhy explain 518 --json
 - 依据和上下文摘要。
 
 `#18` 是当前顺序，新增历史会变；`e1a2b3c4` 是稳定 ID，推荐长期引用。
+
+`recent 1` 是最新；`recent 3` 是最近第 3 条，不是“最近 3 条”。要看最近 3 条列表用 `cmdwhy timeline -n 3`。
 
 ### 5.3 多条命令一起看（50–60 条）
 
@@ -483,6 +488,7 @@ ingest                  导入历史并学习知识库
 analyze                 临时分析文件/stdin
 timeline / tl           时间线；--page/--page-size
 explain / ex / why      解释；支持 518 / #18 / eID / last
+recent                  最近第 N 条；recent 3 / last 3（1=最新）
 block / blk / seg       多条命令阶段分析；50-60 / --last 60
 summary / sum / today   会话/今天/本周/项目汇总
 search / s / find       搜索；--regex/--any/--sort relevance
