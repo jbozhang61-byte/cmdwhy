@@ -1384,6 +1384,8 @@ def cmd_env(args, cfg, renderer):
         ("shell_pid", "shell PID"),
     )
     for key, label in labels:
+        if key == "session" and runtime.get("session") == runtime.get("tmux"):
+            continue
         if runtime.get(key):
             print("  %-7s %s" % (label, runtime[key]))
     if env.distro:
