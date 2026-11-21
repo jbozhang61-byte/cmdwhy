@@ -12,12 +12,12 @@
 | bash | 5.2.21 | 5.2.21 |
 | git | 2.43.0 | 2.43.0 |
 | zsh / fish | zsh 5.9 / fish 3.7 | 未安装 |
-| 测试 | 211 passed | 210 passed |
-| 用时 | 53.9s | 22.8s |
+| 测试 | 211 passed | 211 passed |
+| 用时 | 58.5s | 27.9s |
 
 ## 验证过的功能
 
-- python3 -m unittest discover -s tests：211 个测试全部通过（VM 上最近一次 210 个）；
+- python3 -m unittest discover -s tests：211 个测试全部通过（VM 上也是 211 个）；
 - cmdwhy demo：时间线、任务上下文、history 编号显示正常；
 - cmdwhy fix "git stauts"：干净环境下判定为高可信度，建议 git status；
 - cmdwhy ingest + cmdwhy history --duplicates --all：重复的 git status 分别编号；
@@ -105,7 +105,7 @@ GitHub Actions 的 distro 任务在容器里跑了完整测试：
 - Ubuntu 桌面图形终端里的真实交互（本次通过 script 伪终端验证 bash + hook）；
 - 用户本人的上千条真实历史：当前只找到 494 条真实历史，没有伪造；另用 1600 条真实执行事件做了规模压测；
 - 多人共用机器；
-- Ubuntu 20.04 兼容性回归；22.04/24.04、Debian 12、Arch、Fedora、AlmaLinux 9、Alpine 已由 GitHub Actions（run 44875760103）覆盖并通过。
+- Ubuntu 20.04 兼容性回归；22.04/24.04、Debian 12、Arch、Fedora、AlmaLinux 9、Alpine 已由 GitHub Actions（run 44878694688）覆盖并通过。
 
 ## 复现方式
 
