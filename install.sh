@@ -39,11 +39,15 @@ if ! command -v python3 >/dev/null 2>&1; then
     install_packages
 fi
 
-if ! python3 -c "import venv" >/dev/null 2>&1; then
-    echo "缺少 venv 模块，尝试安装依赖……"
+if ! python3 -c "import venv" >/dev/null 2>&1 || ! python3 -m ensurepip --version >/dev/null 2>&1; then
+    echo "缺少完整 venv/ensurepip，尝试安装 python3-venv……"
     install_packages
 fi
 
+# 上次安装可能留下一个没有 pip 的半成品 .venv
+if [ -d .venv ] && ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
+    rm -rf .venv
+fi
 if [ ! -x .venv/bin/python ]; then
     python3 -m venv .venv
 fi
